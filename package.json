@@ -1,20 +1,14 @@
 {
-  "name": "employee-monitoring-backend",
+  "name": "xoso-proxy",
   "version": "1.0.0",
-  "description": "WebSocket backend for employee monitoring system using Node.js and PostgreSQL on Railway",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "migrate": "node createTables.js"
+    "start": "node index.js"
   },
-  "keywords": ["websocket", "railway", "postgresql", "employee-monitoring"],
-  "author": "YourName",
-  "license": "MIT",
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "pg": "^8.11.3",
-    "ws": "^8.16.0",
-    "node-fetch": "^2.6.7"
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "cors": "^2.8.5"
   }
 }
