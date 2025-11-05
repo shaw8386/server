@@ -3,25 +3,28 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-app.use(cors()); // bật CORS cho frontend
+app.use(cors());
 app.use(express.json());
 
-const TARGET_BASE = "https://xoso188.net"; // API gốc
+const TARGET_BASE = "https://xoso188.net";
 
-// --- Route proxy chính ---
-app.use("/api/*", async (req, res) => {
-  const path = req.originalUrl.replace("/api", ""); // /api/front/... -> /front/...
-  const targetUrl = TARGET_BASE + path + (req.url.includes("?") ? "" : "");
+// ✅ Route proxy chính
+app.use("/api", async (req, res) => {
+  const targetUrl = TARGET_BASE + req.originalUrl; // giữ nguyên /api/...
+  console.log("→ Forwarding:", targetUrl);
 
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: { ...req.headers, host: "xoso188.net" },
+      headers: {
+        ...req.headers,
+        host: "xoso188.net"
+      },
       body: ["GET", "HEAD"].includes(req.method) ? null : req.body
     });
+
     const body = await response.text();
 
-    // copy lại status và headers
     res.status(response.status);
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -33,10 +36,7 @@ app.use("/api/*", async (req, res) => {
   }
 });
 
-// --- Route kiểm tra hoạt động ---
-app.get("/", (req, res) => {
-  res.send("✅ Railway Proxy is running!");
-});
+app.get("/", (_, res) => res.send("✅ Railway Proxy đang hoạt động!"));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Proxy server running on port " + PORT));
+app.listen(PORT, () => console.log("🚀 Proxy server chạy tại port " + PORT));
