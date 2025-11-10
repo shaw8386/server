@@ -51,10 +51,15 @@ app.use(express.json());
 // ========== 🔥 KHỞI TẠO FIREBASE ADMIN ==========
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(fs.readFileSync("./serviceAccountKey.json", "utf8"));
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  if (process.env.FIREBASE_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("✅ Firebase Admin initialized (from GitHub secret)");
+  } else {
+    console.log("⚠️ FIREBASE_KEY not found in environment variables!");
+  }
   console.log("✅ Firebase Admin initialized");
 } catch (e) {
   console.log("⚠️ Không tìm thấy serviceAccountKey.json — bỏ qua FCM init");
@@ -140,5 +145,6 @@ app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
 
 // const PORT = process.env.PORT || 3000;
 // app.listen(PORT, () => console.log("🚀 Proxy server chạy tại port " + PORT));
+
 
 
