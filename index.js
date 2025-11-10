@@ -71,7 +71,7 @@ try {
 }
 
 // ========== 🔔 TOKEN THIẾT BỊ TEST ==========
-const TEST_TOKEN = "ckLxHf3nRNyOGxMQg4IC8Z:APA91bEcidhTCN2_rYsrcUMfeIFo0t38_5v8bX60u8ZkosDc-WWrd7d3zyqBEydaCsRT7Nc29yFC-aIgKVB_G5lYDrxP5lBdHb3pIBEcBYa54D7PGJ-Tw_U";
+// const TEST_TOKEN = "ckLxHf3nRNyOGxMQg4IC8Z:APA91bEcidhTCN2_rYsrcUMfeIFo0t38_5v8bX60u8ZkosDc-WWrd7d3zyqBEydaCsRT7Nc29yFC-aIgKVB_G5lYDrxP5lBdHb3pIBEcBYa54D7PGJ-Tw_U";
 
 // ========== 🧪 ROUTE GỬI THÔNG BÁO THỦ CÔNG ==========
 app.get("/send-fcm", async (req, res) => {
@@ -150,6 +150,7 @@ app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
 
 // const PORT = process.env.PORT || 3000;
 // app.listen(PORT, () => console.log("🚀 Proxy server chạy tại port " + PORT));
+
 
 
 
