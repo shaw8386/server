@@ -1,42 +1,3 @@
-// import express from "express";
-// import fetch from "node-fetch";
-// import cors from "cors";
-
-// const app = express();
-// app.use(cors());
-// app.use(express.json());
-
-// const TARGET_BASE = "https://xoso188.net";
-
-// // ✅ Route proxy chính
-// app.use("/api", async (req, res) => {
-//   const targetUrl = TARGET_BASE + req.originalUrl; // giữ nguyên /api/...
-//   console.log("→ Forwarding:", targetUrl);
-
-//   try {
-//     const response = await fetch(targetUrl, {
-//       method: req.method,
-//       headers: {
-//         ...req.headers,
-//         host: "xoso188.net"
-//       },
-//       body: ["GET", "HEAD"].includes(req.method) ? null : req.body
-//     });
-
-//     const body = await response.text();
-
-//     res.status(response.status);
-//     res.set("Access-Control-Allow-Origin", "*");
-//     res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-//     res.set("Content-Type", response.headers.get("content-type") || "application/json");
-//     res.send(body);
-//   } catch (err) {
-//     console.error("Proxy error:", err);
-//     res.status(500).json({ error: "Proxy failed", message: err.message });
-//   }
-// });
-
-
 // index.js
 import express from "express";
 import fetch from "node-fetch";
@@ -61,7 +22,6 @@ async function initDatabase() {
     await pool.connect();
     console.log("✅ PostgreSQL connected");
 
-    // 🏗️ Tự động tạo bảng nếu chưa tồn tại
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -79,8 +39,6 @@ async function initDatabase() {
     console.error("❌ Database init error:", err.message);
   }
 }
-
-// Gọi khởi tạo
 initDatabase();
 
 // ========== 🔥 KHỞI TẠO FIREBASE ADMIN ==========
@@ -104,29 +62,32 @@ try {
   console.error("❌ Lỗi khi khởi tạo Firebase Admin:", e.message);
 }
 
-// ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
-// So sánh số vé với kết quả từ API
+// ========== ⚙️ HÀM TIỆN ÍCH ==========
+async function sendNotification(token, title, body) {
+  if (!admin.apps.length) return;
+  const message = { notification: { title, body }, token };
+  try {
+    await admin.messaging().send(message);
+    console.log("📤 FCM gửi:", title, "-", body);
+  } catch (err) {
+    console.warn("⚠️ Gửi FCM lỗi:", err.message);
+  }
+}
+
+// 🧠 So sánh kết quả vé
 function checkResult(ticketNumber, results) {
   const n = ticketNumber.trim();
   if (!results) return `⚠️ Không lấy được kết quả xổ số.`;
 
-  // Giải Đặc Biệt
   if (results["ĐB"] && results["ĐB"].includes(n))
     return `🎉 Chúc mừng! Vé ${n} trúng 🎯 Giải Đặc Biệt!`;
-
-  // Giải nhất
   if (results["G1"] && results["G1"].includes(n))
     return `🎉 Vé ${n} trúng 🏆 Giải Nhất!`;
-
-  // Giải nhì
   if (results["G2"] && results["G2"].some(v => v.includes(n)))
     return `🎉 Vé ${n} trúng 🥈 Giải Nhì!`;
-
-  // Giải ba
   if (results["G3"] && results["G3"].some(v => v.includes(n)))
     return `🎉 Vé ${n} trúng 🥉 Giải Ba!`;
 
-  // Các giải còn lại (G4–G7)
   const lowerPrizes = ["G4", "G5", "G6", "G7", "G8"];
   for (let g of lowerPrizes) {
     const arr = Array.isArray(results[g]) ? results[g] : [results[g]];
@@ -135,13 +96,41 @@ function checkResult(ticketNumber, results) {
     }
   }
 
-  // Không trúng
   return `😢 Vé ${n} không trúng thưởng.`;
 }
-//=============
+
+// 🧩 Parse dữ liệu kết quả từ API xoso188.net
+function parseLotteryApiResponse(data) {
+  const out = { date: null, numbers: {} };
+  if (!data) return out;
+
+  try {
+    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+      const item = data.data[0];
+      out.date = item.openDate || item.day || item.createDate;
+      if (item.prize && Array.isArray(item.prize)) {
+        item.prize.forEach(p => {
+          const name = p.prizeName || p.name || "";
+          const nums = (p.numberList || p.numbers || "").split(",");
+          if (name && nums.length) out.numbers[name] = nums.map(x => x.trim());
+        });
+      } else if (item.result) {
+        out.numbers = item.result;
+      }
+    } else if (data.results) {
+      out.numbers = data.results;
+    }
+  } catch (err) {
+    console.warn("⚠️ parseLotteryApiResponse lỗi:", err.message);
+  }
+
+  return out;
+}
+
+// ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
 app.post("/api/save-ticket", async (req, res) => {
   try {
-    const { number, region, station, label, token } = req.body;
+    const { number, region, station, label, token, savedAt } = req.body;
     if (!number || !region || !station || !token) {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu cần thiết" });
     }
@@ -153,54 +142,55 @@ app.post("/api/save-ticket", async (req, res) => {
        RETURNING id, created_at`,
       [number, region, station, label, token]
     );
-
     console.log("🎟️ Vé mới được lưu:", { number, region, station });
 
-    // 2️⃣ Delay 5 giây rồi xử lý kết quả xổ số
+    // 2️⃣ Sau 5s gọi API kết quả xổ số thật
     setTimeout(async () => {
       try {
-        // Lấy dữ liệu kết quả Xổ Số từ API
-        const apiUrl = `https://xoso188.net/api/${region}`;
+        const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${encodeURIComponent(station)}`;
         console.log("📡 Gọi API kết quả:", apiUrl);
+
         const response = await fetch(apiUrl);
-        const data = await response.json();
+        const text = await response.text();
 
-        // ✅ Tùy định dạng API, ví dụ:
-        // data.results = {
-        //   "ĐB": "12345",
-        //   "G1": "54321",
-        //   "G2": ["11111", "22222"],
-        //   ...
-        // }
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          console.warn("⚠️ Không phải JSON, text=", text.slice(0, 200));
+          data = {};
+        }
 
-        const resultText = checkResult(number, data.results);
+        const parsed = parseLotteryApiResponse(data);
+        console.log("📜 Parsed lottery result:", parsed);
 
-        // 3️⃣ Gửi FCM thông báo kết quả
-        if (admin.apps.length) {
-          const message = {
-            notification: {
-              title: "📢 Kết quả vé số của bạn",
-              body: resultText,
-            },
-            token,
-          };
+        if (!parsed.numbers || Object.keys(parsed.numbers).length === 0) {
+          await sendNotification(token, "📢 Kết quả vé số", `⚠️ Không lấy được kết quả xổ số.`);
+          return;
+        }
 
-          try {
-            await admin.messaging().send(message);
-            console.log("📤 Gửi thông báo kết quả:", resultText);
-          } catch (err) {
-            console.warn("⚠️ Gửi thông báo thất bại:", err.message);
+        // So sánh ngày (nếu có savedAt)
+        if (savedAt && parsed.date) {
+          const userDate = new Date(savedAt).toISOString().slice(0, 10);
+          const resultDate = new Date(parsed.date).toISOString().slice(0, 10);
+          if (userDate !== resultDate) {
+            console.log("🕓 Kết quả chưa khớp ngày, bỏ qua check.");
+            await sendNotification(token, "📢 Kết quả vé số", "⏳ Chưa có kết quả cho ngày hôm nay, vui lòng đợi.");
+            return;
           }
         }
+
+        const resultText = checkResult(number, parsed.numbers);
+        await sendNotification(token, "📢 Kết quả vé số của bạn", resultText);
       } catch (err) {
         console.error("❌ Lỗi khi kiểm tra kết quả:", err.message);
+        await sendNotification(token, "📢 Kết quả vé số", `⚠️ Lỗi khi kiểm tra kết quả: ${err.message}`);
       }
     }, 5000);
 
-    // Trả phản hồi cho client ngay lập tức
     res.json({
       success: true,
-      message: "Đã lưu vé thành công! Hệ thống sẽ tự kiểm tra kết quả trong ít giây.",
+      message: "💾 Đã lưu vé! Hệ thống sẽ tự kiểm tra kết quả trong ít giây.",
       ticket: {
         id: result.rows[0].id,
         number,
@@ -219,21 +209,17 @@ app.post("/api/save-ticket", async (req, res) => {
 // ========== 🌐 PROXY API ==========
 const TARGET_BASE = "https://xoso188.net";
 app.use("/api", async (req, res) => {
-  const targetUrl = TARGET_BASE + req.originalUrl; // giữ nguyên /api/...
+  const targetUrl = TARGET_BASE + req.originalUrl;
   console.log("→ Forwarding:", targetUrl);
 
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        ...req.headers,
-        host: "xoso188.net"
-      },
-      body: ["GET", "HEAD"].includes(req.method) ? null : req.body
+      headers: { ...req.headers, host: "xoso188.net" },
+      body: ["GET", "HEAD"].includes(req.method) ? null : req.body,
     });
 
     const body = await response.text();
-
     res.status(response.status);
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -246,10 +232,7 @@ app.use("/api", async (req, res) => {
 });
 
 // ========== 🏠 ROOT ==========
-app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB đang hoạt động!"));
+app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB + Auto Check Lottery hoạt động!"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
-
-
-
