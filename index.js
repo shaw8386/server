@@ -99,41 +99,96 @@ function checkResult(ticketNumber, results) {
   return `😢 Vé ${n} không trúng thưởng.`;
 }
 
-// 🧩 Parse dữ liệu kết quả từ API xoso188.net (chuẩn hóa cho gameCode)
+// Chuyển savedAt (ví dụ "00:21:12 12/11/2025" hoặc "12/11/2025 00:21:12") -> "2025-11-12"
+function normalizeSavedAt(savedAt) {
+  if (!savedAt) return null;
+  // tìm ngày dạng DD/MM/YYYY hoặc YYYY-MM-DD trong chuỗi
+  // hỗ trợ nhiều format
+  const dmy = savedAt.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); // 12/11/2025
+  if (dmy) {
+    const day = dmy[1].padStart(2, '0');
+    const mon = dmy[2].padStart(2, '0');
+    const year = dmy[3];
+    return `${year}-${mon}-${day}`; // yyyy-mm-dd
+  }
+  const ymd = savedAt.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymd) {
+    const year = ymd[1];
+    const mon = ymd[2].padStart(2,'0');
+    const day = ymd[3].padStart(2,'0');
+    return `${year}-${mon}-${day}`;
+  }
+  // fallback: try Date parse then toISOString
+  const dt = new Date(savedAt);
+  if (!isNaN(dt.getTime())) return dt.toISOString().slice(0,10);
+  return null;
+}
+
+// Mới: parse API response theo định dạng bạn đã paste
 function parseLotteryApiResponse(data) {
   const out = { date: null, numbers: {} };
   if (!data) return out;
 
   try {
-    // API mới của xoso188.net
-    if (data.t && data.t.issueList && data.t.issueList.length > 0) {
-      const issue = data.t.issueList[0];
-      out.date = issue.turnNum || issue.openTime;
+    // trường hợp API trả object chứa 't' (theo log bạn gửi)
+    // data.t.issueList is array of issues (mỗi issue.detail là string JSON array)
+    const container = data.t || data; // support both
+    if (container && container.issueList && Array.isArray(container.issueList) && container.issueList.length > 0) {
+      // ưu tiên chọn issue có status === 2 (đã mở) hoặc turnNum gần nhất
+      let issue = container.issueList.find(it => it.status === 2) || container.issueList[0];
 
-      // "detail" là chuỗi JSON chứa danh sách các giải
+      // sometimes API returns issueList sorted newest first - using first is OK
+      if (!issue && container.issueList.length > 0) issue = container.issueList[0];
+
+      // date: prefer openTime or turnNum
+      out.date = issue.openTime || issue.turnNum || container.turnNum || null;
+
+      // detail là string JSON: '["77776","60572","41844,64011", ...]'
       if (issue.detail) {
-        const prizes = JSON.parse(issue.detail);
-
-        // ánh xạ các giải theo index
-        const prizeNames = ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"];
-        prizes.forEach((val, idx) => {
+        let arr;
+        try {
+          arr = JSON.parse(issue.detail);
+        } catch (e) {
+          // nếu không parse được, cố gắng extract bằng regex
+          const txt = String(issue.detail);
+          arr = txt.replace(/^\[|\]$/g, '').split(',').map(s => s.replace(/(^"|"$)/g,'').trim());
+        }
+        // prizeNames index mapping
+        const prizeNames = ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7"];
+        arr.forEach((val, idx) => {
           const key = prizeNames[idx] || `G${idx}`;
+          // val có thể chứa nhiều số cách nhau bằng comma -> split
           const nums = String(val)
-            .split(",")
+            .split(',')
             .map(x => x.trim())
             .filter(Boolean);
           out.numbers[key] = nums;
         });
+      }
+      return out;
+    }
+
+    // fallback: nếu response có data[] kiểu khác (kept from previous code)
+    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+      const item = data.data[0];
+      out.date = item.openDate || item.day || item.createDate || out.date;
+      if (item.prize && Array.isArray(item.prize)) {
+        for (const p of item.prize) {
+          const key = (p.prizeName || "").trim().toUpperCase();
+          const nums = (p.numberList || "")
+            .split(/[,\s]+/)
+            .map(x => x.trim())
+            .filter(Boolean);
+          if (key && nums.length) out.numbers[key] = nums;
+        }
       }
     }
   } catch (err) {
     console.warn("⚠️ parseLotteryApiResponse lỗi:", err.message);
   }
 
-  console.log("🎯 Parsed lottery:", out);
   return out;
 }
-
 
 // ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
 app.post("/api/save-ticket", async (req, res) => {
@@ -157,42 +212,58 @@ app.post("/api/save-ticket", async (req, res) => {
       try {
         const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${encodeURIComponent(station)}`;
         console.log("📡 Gọi API kết quả:", apiUrl);
-
+    
         const response = await fetch(apiUrl);
         const text = await response.text();
-
+    
         let data;
         try {
           data = JSON.parse(text);
         } catch (err) {
-          console.warn("⚠️ Không phải JSON, text=", text.slice(0, 200));
-          data = {};
+          console.warn("⚠️ Response not JSON, raw text preview:", text.slice(0,300));
+          data = null;
         }
-
-        const parsed = parseLotteryApiResponse(data);
+    
+        // nếu có data dạng 'success... t ...' như log, parseLotteryApiResponse sẽ xử lý
+        const parsed = parseLotteryApiResponse(data || (function(){ try{ return JSON.parse(text);}catch(e){return null;} })());
         console.log("📜 Parsed lottery result:", parsed);
-
+    
+        // nếu không có numbers -> debug thêm raw text và trả thông báo "chưa có kết quả"
         if (!parsed.numbers || Object.keys(parsed.numbers).length === 0) {
-          await sendNotification(token, "📢 Kết quả vé số", `⚠️ Không lấy được kết quả xổ số.`);
+          console.warn("⚠️ Parsed numbers empty, raw response preview:", text.slice(0,800));
+          await sendNotification(token, "📢 Kết quả vé số", `⚠️ Không lấy được kết quả xổ số (server chưa cung cấp).`);
           return;
         }
-
-        // So sánh ngày (nếu có savedAt)
-        if (savedAt && parsed.date) {
-          const userDate = new Date(savedAt).toISOString().slice(0, 10);
-          const resultDate = new Date(parsed.date).toISOString().slice(0, 10);
-          if (userDate !== resultDate) {
-            console.log("🕓 Kết quả chưa khớp ngày, bỏ qua check.");
-            await sendNotification(token, "📢 Kết quả vé số", "⏳ Chưa có kết quả cho ngày hôm nay, vui lòng đợi.");
-            return;
+    
+        // chuẩn hoá savedAt của user sang yyyy-mm-dd để so sánh
+        const userYMD = normalizeSavedAt(savedAt); // trả null nếu không parse được
+        let resultYMD = null;
+        if (parsed.date) {
+          // parsed.date có thể là "11/11/2025" hoặc "2025-11-11 18:15:00" -> chuẩn hoá
+          const dmatch1 = String(parsed.date).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          const dmatch2 = String(parsed.date).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (dmatch1) resultYMD = `${dmatch1[3]}-${dmatch1[2].padStart(2,'0')}-${dmatch1[1].padStart(2,'0')}`;
+          else if (dmatch2) resultYMD = `${dmatch2[1]}-${dmatch2[2].padStart(2,'0')}-${dmatch2[3].padStart(2,'0')}`;
+          else {
+            const dt = new Date(parsed.date);
+            if (!isNaN(dt.getTime())) resultYMD = dt.toISOString().slice(0,10);
           }
         }
-
+    
+        // Nếu user gửi savedAt và resultYMD tồn tại, so sánh; nếu khác thì báo người dùng chờ
+        if (userYMD && resultYMD && userYMD !== resultYMD) {
+          console.log("🕓 Ngày user và ngày kết quả khác:", userYMD, resultYMD);
+          await sendNotification(token, "📢 Kết quả vé số", `⏳ Kết quả hiện tại là ${resultYMD}, vé bạn lưu ngày ${userYMD}. Vui lòng đợi kết quả đúng ngày.`);
+          return;
+        }
+    
+        // cuối cùng so sánh số
         const resultText = checkResult(number, parsed.numbers);
         await sendNotification(token, "📢 Kết quả vé số của bạn", resultText);
+    
       } catch (err) {
-        console.error("❌ Lỗi khi kiểm tra kết quả:", err.message);
-        await sendNotification(token, "📢 Kết quả vé số", `⚠️ Lỗi khi kiểm tra kết quả: ${err.message}`);
+        console.error("❌ Lỗi khi kiểm tra kết quả:", err);
+        await sendNotification(token, "📢 Kết quả vé số", `⚠️ Lỗi khi kiểm tra kết quả: ${err.message || err}`);
       }
     }, 5000);
 
@@ -244,5 +315,6 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB + Auto Ch
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
