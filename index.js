@@ -37,33 +37,66 @@
 // });
 
 
+// index.js
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import admin from "firebase-admin";
-import cron from "node-cron";
 import fs from "fs";
-import pool from "./db.js";
+import pkg from "pg";
 
+const { Pool } = pkg;
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ========== 🧠 KẾT NỐI DATABASE & TẠO BẢNG ==========
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+async function initDatabase() {
+  try {
+    await pool.connect();
+    console.log("✅ PostgreSQL connected");
+
+    // 🏗️ Tự động tạo bảng nếu chưa tồn tại
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS tickets (
+        id SERIAL PRIMARY KEY,
+        ticket_number VARCHAR(20) NOT NULL,
+        region VARCHAR(10) NOT NULL,
+        station VARCHAR(50) NOT NULL,
+        label VARCHAR(100),
+        token TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+    await pool.query(createTableSQL);
+    console.log("✅ Table 'tickets' ready");
+  } catch (err) {
+    console.error("❌ Database init error:", err.message);
+  }
+}
+
+// Gọi khởi tạo
+initDatabase();
+
 // ========== 🔥 KHỞI TẠO FIREBASE ADMIN ==========
 try {
+  let serviceAccount;
   if (process.env.FIREBASE_KEY) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("✅ Firebase Admin initialized (from FIREBASE_KEY env)");
+    serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
   } else if (fs.existsSync("./serviceAccountKey.json")) {
-    // fallback nếu chạy local
-    const serviceAccount = JSON.parse(fs.readFileSync("./serviceAccountKey.json", "utf8"));
+    serviceAccount = JSON.parse(fs.readFileSync("./serviceAccountKey.json", "utf8"));
+  }
+
+  if (serviceAccount) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-    console.log("✅ Firebase Admin initialized (from local file)");
+    console.log("✅ Firebase Admin initialized");
   } else {
     console.log("⚠️ FIREBASE_KEY not found — Firebase Admin chưa khởi tạo!");
   }
@@ -71,62 +104,71 @@ try {
   console.error("❌ Lỗi khi khởi tạo Firebase Admin:", e.message);
 }
 
-// ========== 🔔 TOKEN THIẾT BỊ TEST ==========
-// const TEST_TOKEN = "ckLxHf3nRNyOGxMQg4IC8Z:APA91bEcidhTCN2_rYsrcUMfeIFo0t38_5v8bX60u8ZkosDc-WWrd7d3zyqBEydaCsRT7Nc29yFC-aIgKVB_G5lYDrxP5lBdHb3pIBEcBYa54D7PGJ-Tw_U";
-
-// ========== 🧪 ROUTE GỬI THÔNG BÁO THỦ CÔNG ==========
-app.get("/send-fcm", async (req, res) => {
-  if (!admin.apps.length) return res.json({ error: "FCM chưa khởi tạo" });
-
-  const message = {
-    notification: {
-      title: "👋 Hello từ server!",
-      body: "Test thủ công tại " + new Date().toLocaleTimeString(),
-    },
-    token: TEST_TOKEN,
-  };
-
+// ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
+app.post("/api/save-ticket", async (req, res) => {
   try {
-    const response = await admin.messaging().send(message);
-    console.log("✅ FCM gửi thành công:", response);
-    res.json({ success: true, response });
-  } catch (err) {
-    console.error("❌ Lỗi FCM:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+    const { number, region, station, label, token } = req.body;
+    if (!number || !region || !station || !token) {
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu cần thiết" });
+    }
 
-// ========== ⏰ GỬI TỰ ĐỘNG MỖI 5 GIÂY ==========
-cron.schedule("*/5 * * * * *", async () => {
-  if (!admin.apps.length) return;
-  const message = {
-    notification: {
-      title: "🔥 Server tự động gửi",
-      body: "Hello lúc " + new Date().toLocaleTimeString(),
-    },
-    token: TEST_TOKEN,
-  };
+    // 1️⃣ Lưu vé vào DB
+    const result = await pool.query(
+      `INSERT INTO tickets (ticket_number, region, station, label, token)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, created_at`,
+      [number, region, station, label, token]
+    );
 
-  try {
-    await admin.messaging().send(message);
-    console.log("📤 Auto gửi FCM thành công:", new Date().toLocaleTimeString());
+    console.log("🎟️ Vé mới được lưu:", { number, region, station, token });
+
+    // 2️⃣ Gửi thông báo FCM đến thiết bị
+    if (admin.apps.length) {
+      const message = {
+        notification: {
+          title: "🎫 Vé đã lưu thành công!",
+          body: `Số ${number} - ${label} đã được lưu trên hệ thống.`,
+        },
+        token: token,
+      };
+
+      try {
+        await admin.messaging().send(message);
+        console.log("📤 FCM gửi thành công:", token.slice(0, 20) + "...");
+      } catch (err) {
+        console.warn("⚠️ Không thể gửi FCM:", err.message);
+      }
+    }
+
+    // 3️⃣ Trả về phản hồi client
+    res.json({
+      success: true,
+      message: "Đã lưu vé và gửi thông báo thành công!",
+      ticket: {
+        id: result.rows[0].id,
+        number,
+        region,
+        station,
+        label,
+        created_at: result.rows[0].created_at,
+      },
+    });
+
   } catch (err) {
-    console.error("⚠️ Auto gửi lỗi:", err.message);
+    console.error("❌ Lỗi khi lưu vé:", err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // ========== 🌐 PROXY API ==========
 const TARGET_BASE = "https://xoso188.net";
-app.use("/api", async (req, res) => {
+app.use("/api/xoso", async (req, res) => {
   const targetUrl = TARGET_BASE + req.originalUrl;
   console.log("→ Forwarding:", targetUrl);
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        ...req.headers,
-        host: "xoso188.net",
-      },
+      headers: { ...req.headers, host: "xoso188.net" },
       body: ["GET", "HEAD"].includes(req.method) ? null : req.body,
     });
     const body = await response.text();
@@ -142,18 +184,7 @@ app.use("/api", async (req, res) => {
 });
 
 // ========== 🏠 ROOT ==========
-app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM Server đang hoạt động!"));
+app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB đang hoạt động!"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
-
-// app.get("/", (_, res) => res.send("✅ Railway Proxy đang hoạt động!"));
-
-// const PORT = process.env.PORT || 3000;
-// app.listen(PORT, () => console.log("🚀 Proxy server chạy tại port " + PORT));
-
-
-
-
-
-
