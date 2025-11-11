@@ -99,31 +99,36 @@ function checkResult(ticketNumber, results) {
   return `😢 Vé ${n} không trúng thưởng.`;
 }
 
-// 🧩 Parse dữ liệu kết quả từ API xoso188.net
+// 🧩 Parse dữ liệu kết quả từ API xoso188.net (chuẩn hóa cho gameCode)
 function parseLotteryApiResponse(data) {
   const out = { date: null, numbers: {} };
   if (!data) return out;
 
   try {
+    // API xoso188.net dạng: { code, message, data: [ { openDate, prize: [ { prizeName, numberList } ] } ] }
     if (data.data && Array.isArray(data.data) && data.data.length > 0) {
       const item = data.data[0];
       out.date = item.openDate || item.day || item.createDate;
+
       if (item.prize && Array.isArray(item.prize)) {
-        item.prize.forEach(p => {
-          const name = p.prizeName || p.name || "";
-          const nums = (p.numberList || p.numbers || "").split(",");
-          if (name && nums.length) out.numbers[name] = nums.map(x => x.trim());
-        });
-      } else if (item.result) {
-        out.numbers = item.result;
+        for (const p of item.prize) {
+          const key = (p.prizeName || "").trim().toUpperCase();
+          if (!key) continue;
+          const nums = (p.numberList || "")
+            .split(/[,\s]+/)
+            .map(x => x.trim())
+            .filter(Boolean);
+          if (nums.length > 0) {
+            out.numbers[key] = nums;
+          }
+        }
       }
-    } else if (data.results) {
-      out.numbers = data.results;
     }
   } catch (err) {
     console.warn("⚠️ parseLotteryApiResponse lỗi:", err.message);
   }
 
+  console.log("🎯 Parsed from API:", out);
   return out;
 }
 
@@ -236,3 +241,4 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB + Auto Ch
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
