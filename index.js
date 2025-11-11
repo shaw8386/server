@@ -105,6 +105,40 @@ try {
 }
 
 // ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
+// So sánh số vé với kết quả từ API
+function checkResult(ticketNumber, results) {
+  const n = ticketNumber.trim();
+  if (!results) return `⚠️ Không lấy được kết quả xổ số.`;
+
+  // Giải Đặc Biệt
+  if (results["ĐB"] && results["ĐB"].includes(n))
+    return `🎉 Chúc mừng! Vé ${n} trúng 🎯 Giải Đặc Biệt!`;
+
+  // Giải nhất
+  if (results["G1"] && results["G1"].includes(n))
+    return `🎉 Vé ${n} trúng 🏆 Giải Nhất!`;
+
+  // Giải nhì
+  if (results["G2"] && results["G2"].some(v => v.includes(n)))
+    return `🎉 Vé ${n} trúng 🥈 Giải Nhì!`;
+
+  // Giải ba
+  if (results["G3"] && results["G3"].some(v => v.includes(n)))
+    return `🎉 Vé ${n} trúng 🥉 Giải Ba!`;
+
+  // Các giải còn lại (G4–G7)
+  const lowerPrizes = ["G4", "G5", "G6", "G7", "G8"];
+  for (let g of lowerPrizes) {
+    const arr = Array.isArray(results[g]) ? results[g] : [results[g]];
+    if (arr.some(v => v && v.includes(n))) {
+      return `🎉 Vé ${n} trúng ${g}!`;
+    }
+  }
+
+  // Không trúng
+  return `😢 Vé ${n} không trúng thưởng.`;
+}
+//=============
 app.post("/api/save-ticket", async (req, res) => {
   try {
     const { number, region, station, label, token } = req.body;
@@ -120,32 +154,53 @@ app.post("/api/save-ticket", async (req, res) => {
       [number, region, station, label, token]
     );
 
-    console.log("🎟️ Vé mới được lưu:", { number, region, station, token });
-    
-    // 2️⃣ Gửi thông báo FCM đến thiết bị (sau 5 giây)
-    if (admin.apps.length) {
-      const message = {
-        notification: {
-          title: "🎫 Vé đã lưu thành công!",
-          body: `Số ${number} - ${label} đã được lưu trên hệ thống.`,
-        },
-        token: token,
-      };
-    
-      setTimeout(async () => {
-        try {
-          await admin.messaging().send(message);
-          console.log("📤 (Delay 5s) FCM gửi thành công:", token.slice(0, 20) + "...");
-        } catch (err) {
-          console.warn("⚠️ (Delay 5s) Lỗi khi gửi FCM:", err.message);
-        }
-      }, 5000); // ⏱️ delay 5 giây
-    }
+    console.log("🎟️ Vé mới được lưu:", { number, region, station });
 
-    // 3️⃣ Trả về phản hồi client
+    // 2️⃣ Delay 5 giây rồi xử lý kết quả xổ số
+    setTimeout(async () => {
+      try {
+        // Lấy dữ liệu kết quả Xổ Số từ API
+        const apiUrl = `https://xoso188.net/api/${region}`;
+        console.log("📡 Gọi API kết quả:", apiUrl);
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+
+        // ✅ Tùy định dạng API, ví dụ:
+        // data.results = {
+        //   "ĐB": "12345",
+        //   "G1": "54321",
+        //   "G2": ["11111", "22222"],
+        //   ...
+        // }
+
+        const resultText = checkResult(number, data.results);
+
+        // 3️⃣ Gửi FCM thông báo kết quả
+        if (admin.apps.length) {
+          const message = {
+            notification: {
+              title: "📢 Kết quả vé số của bạn",
+              body: resultText,
+            },
+            token,
+          };
+
+          try {
+            await admin.messaging().send(message);
+            console.log("📤 Gửi thông báo kết quả:", resultText);
+          } catch (err) {
+            console.warn("⚠️ Gửi thông báo thất bại:", err.message);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi khi kiểm tra kết quả:", err.message);
+      }
+    }, 5000);
+
+    // Trả phản hồi cho client ngay lập tức
     res.json({
       success: true,
-      message: "Đã lưu vé và gửi thông báo thành công!",
+      message: "Đã lưu vé thành công! Hệ thống sẽ tự kiểm tra kết quả trong ít giây.",
       ticket: {
         id: result.rows[0].id,
         number,
@@ -155,7 +210,6 @@ app.post("/api/save-ticket", async (req, res) => {
         created_at: result.rows[0].created_at,
       },
     });
-
   } catch (err) {
     console.error("❌ Lỗi khi lưu vé:", err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -190,4 +244,5 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB đang ho�
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
