@@ -1,20 +1,21 @@
-// db.js
-const { Pool } = require("pg");
-require("dotenv").config();
+// db.js (ESM version)
+import pkg from "pg";
+import dotenv from "dotenv";
+dotenv.config();
 
-const pool = new Pool({
+const { Pool } = pkg;
+
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Railway yêu cầu SSL
+  ssl: { rejectUnauthorized: false },
 });
 
-// 🧠 Hàm khởi tạo database (tạo bảng nếu chưa có)
-async function initDatabase() {
+// 🧠 Tự tạo bảng nếu chưa có
+export async function initDatabase() {
   try {
     const client = await pool.connect();
-
     console.log("✅ PostgreSQL connected");
 
-    // Tạo bảng tickets nếu chưa tồn tại
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -26,17 +27,15 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
-
     await client.query(createTableQuery);
     console.log("✅ Table 'tickets' ready");
-
     client.release();
   } catch (err) {
     console.error("❌ Database init error:", err.message);
   }
 }
 
-// Gọi hàm khởi tạo ngay khi khởi động
+// Chạy init ngay khi module được import
 initDatabase();
 
-module.exports = pool;
+export default pool;
