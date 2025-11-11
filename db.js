@@ -1,17 +1,17 @@
-// db.js (ESM version)
+// db.js (chuẩn ESM cho Railway)
 import pkg from "pg";
 import dotenv from "dotenv";
 dotenv.config();
 
 const { Pool } = pkg;
 
-export const pool = new Pool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false } // Railway yêu cầu SSL
 });
 
-// 🧠 Tự tạo bảng nếu chưa có
-export async function initDatabase() {
+// 🧠 Tự động tạo bảng nếu chưa có
+async function initDatabase() {
   try {
     const client = await pool.connect();
     console.log("✅ PostgreSQL connected");
@@ -27,6 +27,7 @@ export async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
+
     await client.query(createTableQuery);
     console.log("✅ Table 'tickets' ready");
     client.release();
@@ -35,7 +36,8 @@ export async function initDatabase() {
   }
 }
 
-// Chạy init ngay khi module được import
+// Gọi init() khi module load
 initDatabase();
 
+// ✅ Export đúng kiểu ESM
 export default pool;
