@@ -43,6 +43,7 @@ import cors from "cors";
 import admin from "firebase-admin";
 import cron from "node-cron";
 import fs from "fs";
+import pool from "./db.js";
 
 const app = express();
 app.use(cors());
@@ -150,6 +151,7 @@ app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
 
 // const PORT = process.env.PORT || 3000;
 // app.listen(PORT, () => console.log("🚀 Proxy server chạy tại port " + PORT));
+
 
 
 
