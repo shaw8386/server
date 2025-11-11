@@ -121,8 +121,8 @@ app.post("/api/save-ticket", async (req, res) => {
     );
 
     console.log("🎟️ Vé mới được lưu:", { number, region, station, token });
-
-    // 2️⃣ Gửi thông báo FCM đến thiết bị
+    
+    // 2️⃣ Gửi thông báo FCM đến thiết bị (sau 5 giây)
     if (admin.apps.length) {
       const message = {
         notification: {
@@ -131,13 +131,15 @@ app.post("/api/save-ticket", async (req, res) => {
         },
         token: token,
       };
-
-      try {
-        await admin.messaging().send(message);
-        console.log("📤 FCM gửi thành công:", token.slice(0, 20) + "...");
-      } catch (err) {
-        console.warn("⚠️ Không thể gửi FCM:", err.message);
-      }
+    
+      setTimeout(async () => {
+        try {
+          await admin.messaging().send(message);
+          console.log("📤 (Delay 5s) FCM gửi thành công:", token.slice(0, 20) + "...");
+        } catch (err) {
+          console.warn("⚠️ (Delay 5s) Lỗi khi gửi FCM:", err.message);
+        }
+      }, 5000); // ⏱️ delay 5 giây
     }
 
     // 3️⃣ Trả về phản hồi client
@@ -188,3 +190,4 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB đang ho�
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
