@@ -105,32 +105,35 @@ function parseLotteryApiResponse(data) {
   if (!data) return out;
 
   try {
-    // API xoso188.net dạng: { code, message, data: [ { openDate, prize: [ { prizeName, numberList } ] } ] }
-    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-      const item = data.data[0];
-      out.date = item.openDate || item.day || item.createDate;
+    // API mới của xoso188.net
+    if (data.t && data.t.issueList && data.t.issueList.length > 0) {
+      const issue = data.t.issueList[0];
+      out.date = issue.turnNum || issue.openTime;
 
-      if (item.prize && Array.isArray(item.prize)) {
-        for (const p of item.prize) {
-          const key = (p.prizeName || "").trim().toUpperCase();
-          if (!key) continue;
-          const nums = (p.numberList || "")
-            .split(/[,\s]+/)
+      // "detail" là chuỗi JSON chứa danh sách các giải
+      if (issue.detail) {
+        const prizes = JSON.parse(issue.detail);
+
+        // ánh xạ các giải theo index
+        const prizeNames = ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"];
+        prizes.forEach((val, idx) => {
+          const key = prizeNames[idx] || `G${idx}`;
+          const nums = String(val)
+            .split(",")
             .map(x => x.trim())
             .filter(Boolean);
-          if (nums.length > 0) {
-            out.numbers[key] = nums;
-          }
-        }
+          out.numbers[key] = nums;
+        });
       }
     }
   } catch (err) {
     console.warn("⚠️ parseLotteryApiResponse lỗi:", err.message);
   }
 
-  console.log("🎯 Parsed from API:", out);
+  console.log("🎯 Parsed lottery:", out);
   return out;
 }
+
 
 // ========== 🎟️ API NHẬN VÉ TỪ CLIENT ==========
 app.post("/api/save-ticket", async (req, res) => {
@@ -241,4 +244,5 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB + Auto Ch
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
