@@ -218,16 +218,22 @@ app.post("/api/save-ticket", async (req, res) => {
 
 // ========== 🌐 PROXY API ==========
 const TARGET_BASE = "https://xoso188.net";
-app.use("/api/xoso", async (req, res) => {
-  const targetUrl = TARGET_BASE + req.originalUrl;
+app.use("/api", async (req, res) => {
+  const targetUrl = TARGET_BASE + req.originalUrl; // giữ nguyên /api/...
   console.log("→ Forwarding:", targetUrl);
+
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: { ...req.headers, host: "xoso188.net" },
-      body: ["GET", "HEAD"].includes(req.method) ? null : req.body,
+      headers: {
+        ...req.headers,
+        host: "xoso188.net"
+      },
+      body: ["GET", "HEAD"].includes(req.method) ? null : req.body
     });
+
     const body = await response.text();
+
     res.status(response.status);
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -244,5 +250,6 @@ app.get("/", (_, res) => res.send("✅ Railway Proxy + FCM + Ticket DB đang ho�
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
