@@ -97,22 +97,15 @@ function getSchedule(region) {
   const now = new Date();
   const draw = new Date(now);
   draw.setHours(DRAW_TIMES[region]?.hour || 18, DRAW_TIMES[region]?.minute || 35, 0, 0);
+
   const diff = draw - now;
-
   if (diff <= 0) {
-    return { delay: -1, scheduleTime: new Date(Date.now() + 5000) };
+    return {
+      delay: -1,
+      scheduleTime: new Date(Date.now() + 5000),
+    };
   }
-  return { delay: diff, scheduleTime: new Date(Date.now() + diff) };
-}
 
-
-  return {
-    delay: diff,
-    scheduleTime: new Date(Date.now() + diff),
-  };
-}
-
-  // Nếu chưa tới giờ xổ
   return {
     delay: diff,
     scheduleTime: new Date(Date.now() + diff),
@@ -275,6 +268,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
