@@ -17,6 +17,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
+// Thiết lập múi giờ VN cho mọi connection
+pool.on("connect", client => {
+  client.query("SET TIME ZONE 'Asia/Ho_Chi_Minh';");
+});
 
 async function initDatabase() {
   try {
@@ -268,6 +272,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
