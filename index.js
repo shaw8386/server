@@ -27,6 +27,7 @@ async function initDatabase() {
     await pool.query(`SET TIME ZONE 'Asia/Ho_Chi_Minh';`);
     console.log("✅ PostgreSQL connected");
 
+    // Tạo bảng nếu chưa có
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -35,17 +36,38 @@ async function initDatabase() {
         station VARCHAR(50) NOT NULL,
         label VARCHAR(100),
         token TEXT NOT NULL,
-        draw_date DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         scheduled_time TIMESTAMP
       );
     `;
     await pool.query(createTableSQL);
     console.log("✅ Table 'tickets' ready");
+
+    // 🆕 Thêm cột draw_date nếu chưa có
+    const checkDrawDate = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name='tickets' AND column_name='draw_date';
+    `);
+    if (checkDrawDate.rows.length === 0) {
+      await pool.query(`ALTER TABLE tickets ADD COLUMN draw_date DATE;`);
+      console.log("🆕 Added 'draw_date' column to tickets table");
+    }
+
+    // 🆕 Đảm bảo cột scheduled_time vẫn tồn tại
+    const checkSchedule = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name='tickets' AND column_name='scheduled_time';
+    `);
+    if (checkSchedule.rows.length === 0) {
+      await pool.query(`ALTER TABLE tickets ADD COLUMN scheduled_time TIMESTAMP;`);
+      console.log("🆕 Added 'scheduled_time' column to tickets table");
+    }
+
   } catch (err) {
     console.error("❌ Database init error:", err.message);
   }
 }
+
 initDatabase();
 
 // ====================== 🔥 FIREBASE ADMIN ======================
@@ -272,3 +294,4 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
