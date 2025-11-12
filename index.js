@@ -76,21 +76,52 @@ async function sendNotification(token, title, body) {
 
 // 🧠 So sánh kết quả vé
 function checkResult(ticketNumber, results) {
-  const n = ticketNumber.trim();
+  const n = ticketNumber.trim().replace(/^0+/, ""); // bỏ 0 đầu
   if (!results) return `⚠️ Không lấy được kết quả xổ số.`;
 
-  const match = (arr) => arr.some(v => v.endsWith(n)); // so sánh 5 số cuối
+  // Hàm so khớp theo độ dài từng giải
+  const matchPrize = (arr, digits) => {
+    const user = n.slice(-digits);
+    return arr.some(v => String(v).slice(-digits) === user);
+  };
 
-  if (results["ĐB"] && match(results["ĐB"])) return `🎯 Vé ${n} trúng Giải Đặc Biệt!`;
-  if (results["G1"] && match(results["G1"])) return `🏆 Vé ${n} trúng Giải Nhất!`;
-  if (results["G2"] && match(results["G2"])) return `🥈 Vé ${n} trúng Giải Nhì!`;
-  if (results["G3"] && match(results["G3"])) return `🥉 Vé ${n} trúng Giải Ba!`;
+  // Giải 8 – 2 số cuối
+  if (results["G8"] && matchPrize(results["G8"], 2))
+    return `🎉 Vé ${ticketNumber} trúng Giải 8!`;
 
-  for (let g of ["G4", "G5", "G6", "G7", "G8"]) {
-    if (results[g] && match(results[g])) return `🎉 Vé ${n} trúng ${g}!`;
-  }
+  // Giải 7 – 3 số cuối
+  if (results["G7"] && matchPrize(results["G7"], 3))
+    return `🎉 Vé ${ticketNumber} trúng Giải 7!`;
 
-  return `😢 Vé ${n} không trúng thưởng.`;
+  // Giải 6 – 4 số cuối
+  if (results["G6"] && matchPrize(results["G6"], 4))
+    return `🎉 Vé ${ticketNumber} trúng Giải 6!`;
+
+  // Giải 5 – 5 số cuối
+  if (results["G5"] && matchPrize(results["G5"], 5))
+    return `🎉 Vé ${ticketNumber} trúng Giải 5!`;
+
+  // Giải 4 – 5 số cuối
+  if (results["G4"] && matchPrize(results["G4"], 5))
+    return `🎉 Vé ${ticketNumber} trúng Giải 4!`;
+
+  // Giải 3 – 5 số cuối
+  if (results["G3"] && matchPrize(results["G3"], 5))
+    return `🎉 Vé ${ticketNumber} trúng Giải 3!`;
+
+  // Giải 2 – 5 số cuối
+  if (results["G2"] && matchPrize(results["G2"], 5))
+    return `🎉 Vé ${ticketNumber} trúng Giải 2!`;
+
+  // Giải 1 – 5 số cuối
+  if (results["G1"] && matchPrize(results["G1"], 5))
+    return `🎉 Vé ${ticketNumber} trúng Giải 1!`;
+
+  // Đặc biệt – đủ 6 số
+  if (results["ĐB"] && matchPrize(results["ĐB"], 6))
+    return `🎯 Vé ${ticketNumber} trúng 🎖 Giải Đặc Biệt!`;
+
+  return `😢 Vé ${ticketNumber} không trúng thưởng.`;
 }
 
 // ========== 📅 Format thời gian và parse API ==========
@@ -241,3 +272,4 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port", PORT));
+
