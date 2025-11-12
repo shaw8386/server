@@ -79,7 +79,7 @@ function checkResult(ticketNumber, results) {
   const n = ticketNumber.trim();
   if (!results) return `⚠️ Không lấy được kết quả xổ số.`;
 
-  const match = (arr) => arr.some(v => v.endsWith(n)); // so sánh theo 5 số cuối
+  const match = (arr) => arr.some(v => v.endsWith(n)); // so sánh 5 số cuối
 
   if (results["ĐB"] && match(results["ĐB"])) return `🎯 Vé ${n} trúng Giải Đặc Biệt!`;
   if (results["G1"] && match(results["G1"])) return `🏆 Vé ${n} trúng Giải Nhất!`;
@@ -93,18 +93,17 @@ function checkResult(ticketNumber, results) {
   return `😢 Vé ${n} không trúng thưởng.`;
 }
 
-// Chuyển savedAt (ví dụ "00:21:12 12/11/2025" hoặc "12/11/2025 00:21:12") -> "2025-11-12"
+// ========== 📅 Format thời gian và parse API ==========
 function normalizeSavedAt(savedAt) {
   if (!savedAt) return null;
   const dmy = savedAt.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
   const ymd = savedAt.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
   const dt = new Date(savedAt);
   return !isNaN(dt.getTime()) ? dt.toISOString().slice(0, 10) : null;
 }
 
-// Parse API xoso188.net
 function parseLotteryApiResponse(data) {
   const out = { date: null, numbers: {} };
   if (!data) return out;
@@ -120,11 +119,17 @@ function parseLotteryApiResponse(data) {
         try {
           arr = JSON.parse(issue.detail);
         } catch {
-          arr = String(issue.detail).replace(/^\[|\]$/g, '').split(',').map(s => s.replace(/(^"|"$)/g, '').trim());
+          arr = String(issue.detail)
+            .replace(/^\[|\]$/g, "")
+            .split(",")
+            .map(s => s.replace(/(^"|"$)/g, "").trim());
         }
         const prizeNames = ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7"];
         arr.forEach((val, idx) => {
-          const nums = String(val).split(',').map(x => x.trim()).filter(Boolean);
+          const nums = String(val)
+            .split(",")
+            .map(x => x.trim())
+            .filter(Boolean);
           out.numbers[prizeNames[idx] || `G${idx}`] = nums;
         });
       }
@@ -149,11 +154,12 @@ app.post("/api/save-ticket", async (req, res) => {
        RETURNING id, created_at`,
       [number, region, station, label, token]
     );
+
     console.log("🎟️ Vé mới được lưu:", { number, region, station });
 
     res.json({
       success: true,
-      message: "💾 Đã lưu vé! Hệ thống sẽ kiểm tra kết quả sau 5 giây.",
+      message: "💾 Đã lưu vé! Hệ thống sẽ kiểm tra kết quả sau 1 phút.",
       ticket: {
         id: result.rows[0].id,
         number,
@@ -164,11 +170,12 @@ app.post("/api/save-ticket", async (req, res) => {
       },
     });
 
-    // 2️⃣ Sau 5s — kiểm tra kết quả ngay lập tức
+    // 2️⃣ Sau 1 phút (60 giây) → gọi API & gửi thông báo
+    const delay = 60 * 1000; // 60s
     setTimeout(async () => {
       try {
         const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${encodeURIComponent(station)}`;
-        console.log("📡 Gọi API kết quả:", apiUrl);
+        console.log(`📡 [AUTO CHECK] Gọi API kết quả: ${apiUrl}`);
 
         const response = await fetch(apiUrl);
         const text = await response.text();
@@ -189,20 +196,13 @@ app.post("/api/save-ticket", async (req, res) => {
           return;
         }
 
-        // Chuẩn hoá ngày để tránh lệch múi giờ
-        const userYMD = normalizeSavedAt(savedAt);
-        const resultYMD = normalizeSavedAt(parsed.date);
-        console.log("📅 Ngày vé:", userYMD, "| Ngày kết quả:", resultYMD);
-
         const resultText = checkResult(number, parsed.numbers);
         await sendNotification(token, "🎟️ Kết quả vé số của bạn", resultText);
-
       } catch (err) {
         console.error("❌ Lỗi khi kiểm tra vé:", err);
         await sendNotification(token, "📢 Kết quả vé số", `⚠️ Lỗi khi kiểm tra kết quả: ${err.message || err}`);
       }
-    }, 5000);
-
+    }, delay);
   } catch (err) {
     console.error("❌ Lỗi khi lưu vé:", err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -236,8 +236,8 @@ app.use("/api", async (req, res) => {
 
 // ========== 🏠 ROOT ==========
 app.get("/", (_, res) =>
-  res.send("✅ Railway Proxy + FCM + Ticket DB + Test Nhanh Auto Check hoạt động!")
+  res.send("✅ Railway Proxy + FCM + Ticket DB + Auto Check after 1 minute hoạt động!")
 );
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+app.listen(PORT, () => console.log("🚀 Server chạy tại port", PORT));
