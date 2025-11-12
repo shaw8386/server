@@ -189,12 +189,28 @@ app.post("/api/save-ticket", async (req, res) => {
        RETURNING id, created_at, scheduled_time`,
       [number, region, station, label, token, scheduleTime]
     );
-    console.log("🎟️ Vé mới:", { number, region, station, scheduled_time: scheduleTime.toISOString() });
+
+    console.log("🎟️ Vé mới:", {
+      number,
+      region,
+      station,
+      scheduled_time: scheduleTime.toISOString(),
+    });
 
     // 2️⃣ Hẹn giờ check
     if (isPast) {
       console.log("🕓 Giờ xổ đã qua — check sau 5s");
-      res.json({ success: true, message: "💾 Vé lưu thành công! Kết quả sẽ được kiểm tra ngay." });
+      res.json({
+        success: true,
+        message: "💾 Vé lưu thành công! Kết quả sẽ được kiểm tra ngay.",
+      });
+
+      // Gửi thông báo sau khi lưu 5s
+      setTimeout(() => {
+        sendNotification(token, "🎟️ Đã lưu vé thành công", "Hệ thống sẽ kiểm tra kết quả trong giây lát.");
+      }, 5000);
+
+      // Check kết quả sau 5s
       setTimeout(() => checkAndNotify({ number, station, token }), 5000);
     } else {
       const minutes = Math.round(delay / 60000);
@@ -204,6 +220,17 @@ app.post("/api/save-ticket", async (req, res) => {
         message: `💾 Vé lưu thành công! Sẽ kiểm tra sau ${minutes} phút.`,
         scheduled_time: scheduleTime.toLocaleString("vi-VN"),
       });
+
+      // Gửi thông báo sau 5s khi đặt lịch xong
+      setTimeout(() => {
+        sendNotification(
+          token,
+          "📅 Vé đã được lưu & lên lịch kiểm tra",
+          `Vé ${number} (${label}) sẽ được dò kết quả vào ${scheduleTime.toLocaleString("vi-VN")}.`
+        );
+      }, 5000);
+
+      // Hẹn giờ check kết quả
       setTimeout(() => checkAndNotify({ number, station, token }), delay);
     }
   } catch (err) {
@@ -211,6 +238,7 @@ app.post("/api/save-ticket", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 // ====================== 🎯 CHECK & NOTIFY ======================
 async function checkAndNotify({ number, station, token }) {
@@ -272,6 +300,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
