@@ -6,6 +6,7 @@ import admin from "firebase-admin";
 import fs from "fs";
 import pkg from "pg";
 
+process.env.TZ = "Asia/Ho_Chi_Minh";
 const { Pool } = pkg;
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ const pool = new Pool({
 async function initDatabase() {
   try {
     await pool.connect();
+    await pool.query(`SET TIME ZONE 'Asia/Ho_Chi_Minh';`);
     console.log("✅ PostgreSQL connected");
 
     // Tạo bảng nếu chưa có
@@ -93,21 +95,22 @@ const DRAW_TIMES = {
 // ✅ Tính thời gian delay (ms) và thời điểm hẹn — chuẩn theo giờ VN
 function getSchedule(region) {
   const now = new Date();
-  // Giờ VN = UTC +7
-  const nowVN = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-
-  const draw = new Date(nowVN);
+  const draw = new Date(now);
   draw.setHours(DRAW_TIMES[region]?.hour || 18, DRAW_TIMES[region]?.minute || 35, 0, 0);
 
-  // Nếu đã qua giờ xổ của hôm nay => trả -1 (đã xổ)
-  const diff = draw - nowVN;
+  const diff = draw - now;
   if (diff <= 0) {
-    // Đã xổ: set schedule sau 5s kể từ bây giờ (giờ VN)
     return {
       delay: -1,
       scheduleTime: new Date(Date.now() + 5000),
     };
   }
+
+  return {
+    delay: diff,
+    scheduleTime: new Date(Date.now() + diff),
+  };
+}
 
   // Nếu chưa tới giờ xổ
   return {
@@ -272,4 +275,5 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
