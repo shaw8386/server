@@ -90,13 +90,30 @@ const DRAW_TIMES = {
   nam: { hour: 16, minute: 35 },
 };
 
-// ✅ Tính thời gian delay (ms) và thời điểm hẹn
+// ✅ Tính thời gian delay (ms) và thời điểm hẹn — chuẩn theo giờ VN
 function getSchedule(region) {
   const now = new Date();
-  const draw = new Date(now);
+  // Giờ VN = UTC +7
+  const nowVN = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+
+  const draw = new Date(nowVN);
   draw.setHours(DRAW_TIMES[region]?.hour || 18, DRAW_TIMES[region]?.minute || 35, 0, 0);
-  const diff = draw - now;
-  return { delay: diff > 0 ? diff : -1, scheduleTime: diff > 0 ? draw : new Date(Date.now() + 5000) };
+
+  // Nếu đã qua giờ xổ của hôm nay => trả -1 (đã xổ)
+  const diff = draw - nowVN;
+  if (diff <= 0) {
+    // Đã xổ: set schedule sau 5s kể từ bây giờ (giờ VN)
+    return {
+      delay: -1,
+      scheduleTime: new Date(Date.now() + 5000),
+    };
+  }
+
+  // Nếu chưa tới giờ xổ
+  return {
+    delay: diff,
+    scheduleTime: new Date(Date.now() + diff),
+  };
 }
 
 // 🎯 Dò kết quả vé
@@ -255,3 +272,4 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
