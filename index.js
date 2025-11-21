@@ -175,69 +175,75 @@ function parseLotteryApiResponse(data) {
 // ====================== 🎟️ SAVE TICKET ======================
 app.post("/api/save-ticket", async (req, res) => {
   try {
-    const { number, region, station, label, token } = req.body;
-    if (!number || !region || !station || !token)
+    const { number, region, station, label, token, buy_date } = req.body;
+
+    if (!number || !region || !station || !token || !buy_date)
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
 
-    const { delay, scheduleTime } = getSchedule(region);
-    const isPast = delay < 0;
+    const buyDate = new Date(buy_date);
+    const today = new Date();
 
-    // 1️⃣ Lưu vé vào DB (có scheduled_time)
-    const result = await pool.query(
+    const drawTime = new Date();
+    drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
+
+    // ================================
+    // 1️⃣ VÉ CŨ (ngày mua trước hôm nay)
+    // ================================
+    if (buyDate < new Date(today.toDateString())) {
+      console.log("🎯 Vé cũ → DÒ NGAY");
+
+      setTimeout(() => checkAndNotify({ number, station, token }), 1000);
+
+      return res.json({
+        success: true,
+        mode: "immediate",
+        message: "Vé đã có kết quả — dò ngay"
+      });
+    }
+
+    // ================================
+    // 2️⃣ VÉ HÔM NAY nhưng đã qua giờ xổ
+    // ================================
+    if (buyDate.toDateString() === today.toDateString() && today > drawTime) {
+      console.log("🎯 Vé hôm nay nhưng đã qua giờ xổ → DÒ NGAY");
+
+      setTimeout(() => checkAndNotify({ number, station, token }), 1000);
+
+      return res.json({
+        success: true,
+        mode: "immediate",
+        message: "Đã qua giờ xổ — dò ngay"
+      });
+    }
+
+    // ================================
+    // 3️⃣ VÉ MỚI — LÊN LỊCH
+    // ================================
+    const delay = drawTime - today;
+
+    await pool.query(
       `INSERT INTO tickets (ticket_number, region, station, label, token, scheduled_time)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, created_at, scheduled_time`,
-      [number, region, station, label, token, scheduleTime]
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [number, region, station, label, token, drawTime]
     );
 
-    console.log("🎟️ Vé mới:", {
-      number,
-      region,
-      station,
-      scheduled_time: scheduleTime.toISOString(),
+    console.log("⏳ Đặt lịch sau", delay / 1000, "giây");
+
+    setTimeout(() => checkAndNotify({ number, station, token }), delay);
+
+    return res.json({
+      success: true,
+      mode: "scheduled",
+      message: "Vé chưa xổ — đã đặt lịch",
+      scheduled_time: drawTime.toLocaleString("vi-VN")
     });
 
-    // 2️⃣ Hẹn giờ check
-    if (isPast) {
-      console.log("🕓 Giờ xổ đã qua — check sau 5s");
-      res.json({
-        success: true,
-        message: "💾 Vé lưu thành công! Kết quả sẽ được kiểm tra ngay.",
-      });
-
-      // Gửi thông báo sau khi lưu 5s
-      setTimeout(() => {
-        sendNotification(token, "🎟️ Đã lưu vé thành công", "Hệ thống sẽ kiểm tra kết quả trong giây lát.");
-      }, 5000);
-
-      // Check kết quả sau 5s
-      setTimeout(() => checkAndNotify({ number, station, token }), 5000);
-    } else {
-      const minutes = Math.round(delay / 60000);
-      console.log(`⏳ Hẹn kiểm tra sau ${minutes} phút (${region.toUpperCase()})`);
-      res.json({
-        success: true,
-        message: `💾 Vé lưu thành công! Sẽ kiểm tra sau ${minutes} phút.`,
-        scheduled_time: scheduleTime.toLocaleString("vi-VN"),
-      });
-
-      // Gửi thông báo sau 5s khi đặt lịch xong
-      setTimeout(() => {
-        sendNotification(
-          token,
-          "📅 Vé đã được lưu & lên lịch kiểm tra",
-          `Vé ${number} (${label}) sẽ được dò kết quả vào ${scheduleTime.toLocaleString("vi-VN")}.`
-        );
-      }, 5000);
-
-      // Hẹn giờ check kết quả
-      setTimeout(() => checkAndNotify({ number, station, token }), delay);
-    }
   } catch (err) {
-    console.error("❌ Lỗi khi lưu vé:", err.message);
+    console.error("❌ save-ticket error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 
 // ====================== 🎯 CHECK & NOTIFY ======================
@@ -300,6 +306,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
