@@ -252,7 +252,7 @@ app.post("/api/save-ticket", async (req, res) => {
       try { dataParsed = JSON.parse(txt); }
       catch { dataParsed = null; }
 
-      const parsed = parseLotteryApiResponse(dataParsed);
+      const parsed = parseLotteryApiResponse(dataParsed, region);
       const resultText = checkResult(number, parsed.numbers, region);
 
       sendNotification(token, "🎟️ Kết quả vé số", resultText);
@@ -279,7 +279,7 @@ app.post("/api/save-ticket", async (req, res) => {
       try { dataParsed = JSON.parse(txt); }
       catch { dataParsed = null; }
 
-      const parsed = parseLotteryApiResponse(dataParsed);
+      const parsed = parseLotteryApiResponse(dataParsed, region);
       const resultText = checkResult(number, parsed.numbers, region);
 
       sendNotification(token, "🎟️ Kết quả vé số", resultText);
@@ -333,7 +333,7 @@ async function checkAndNotify({ number, station, token, region }) {
     try { dataParsed = JSON.parse(txt); }
     catch { dataParsed = null; }
 
-    const parsed = parseLotteryApiResponse(dataParsed);
+    const parsed = parseLotteryApiResponse(dataParsed, region);
 
     const resultText = checkResult(number, parsed.numbers, region);
 
@@ -365,6 +365,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
