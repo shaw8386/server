@@ -209,10 +209,14 @@ app.post("/api/save-ticket", async (req, res) => {
 
       setTimeout(() => checkAndNotify({ number, station, token, region }), 1000);
 
+      const parsed = parseLotteryApiResponse(data);
+      const resultText = checkResult(number, parsed.numbers, region);
+      
       return res.json({
         success: true,
         mode: "immediate",
-        message: "Vé đã có kết quả — dò ngay"
+        message: "Vé đã có kết quả — dò ngay",
+        result: resultText   // ⭐ Gửi về kết quả thật
       });
     }
 
@@ -321,6 +325,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
