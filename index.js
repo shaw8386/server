@@ -207,7 +207,7 @@ app.post("/api/save-ticket", async (req, res) => {
     if (buyDate < new Date(today.toDateString())) {
       console.log("🎯 Vé cũ → DÒ NGAY");
 
-      setTimeout(() => checkAndNotify({ number, station, token }), 1000);
+      setTimeout(() => checkAndNotify({ number, station, token, region }), 1000);
 
       return res.json({
         success: true,
@@ -222,7 +222,7 @@ app.post("/api/save-ticket", async (req, res) => {
     if (buyDate.toDateString() === today.toDateString() && today > drawTime) {
       console.log("🎯 Vé hôm nay nhưng đã qua giờ xổ → DÒ NGAY");
 
-      setTimeout(() => checkAndNotify({ number, station, token }), 1000);
+      setTimeout(() => checkAndNotify({ number, station, token, region }), 1000);
 
       return res.json({
         success: true,
@@ -244,7 +244,7 @@ app.post("/api/save-ticket", async (req, res) => {
 
     console.log("⏳ Đặt lịch sau", delay / 1000, "giây");
 
-    setTimeout(() => checkAndNotify({ number, station, token }), delay);
+    setTimeout(() => checkAndNotify({ number, station, token, region }), delay);
 
     return res.json({
       success: true,
@@ -262,7 +262,7 @@ app.post("/api/save-ticket", async (req, res) => {
 
 
 // ====================== 🎯 CHECK & NOTIFY ======================
-async function checkAndNotify({ number, station, token }) {
+async function checkAndNotify({ number, station, token, region }) {
   try {
     const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${encodeURIComponent(station)}`;
     console.log("📡 Gọi API kết quả:", apiUrl);
@@ -283,7 +283,7 @@ async function checkAndNotify({ number, station, token }) {
       return;
     }
 
-    const resultText = checkResult(number, parsed.numbers);
+    const resultText = checkResult(number, parsed.numbers, region);
     await sendNotification(token, "🎟️ Kết quả vé số của bạn", resultText);
   } catch (err) {
     console.error("❌ Lỗi check vé:", err.message);
@@ -321,6 +321,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
