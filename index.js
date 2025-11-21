@@ -191,28 +191,37 @@ function parseLotteryApiResponse(data, region) {
 
     const detail = JSON.parse(issue.detail);
 
+    // Miền Bắc → mỗi phần tử là 1 số, dễ
     if (region === "bac") {
-      // Miền Bắc 27 số
       const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7"];
       const counts = [1,1,1,6,4,6,3,4];
 
       let start = 0;
       prizeNames.forEach((p, i) => {
-        out.numbers[p] = detail.slice(start, start + counts[i]).map(x => String(x).trim());
+        out.numbers[p] = detail
+          .slice(start, start + counts[i])
+          .map(x => String(x).trim());
         start += counts[i];
       });
-
-    } else {
-      // Miền Trung / Nam
-      const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
-      const counts = [1,1,1,2,7,1,3,4,1];
-
-      let start = 0;
-      prizeNames.forEach((p, i) => {
-        out.numbers[p] = detail.slice(start, start + counts[i]).map(x => String(x).trim());
-        start += counts[i];
-      });
+      return out;
     }
+
+    // Miền Trung / Miền Nam → mỗi mục detail là chuỗi chứa nhiều số
+    const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
+
+    prizeNames.forEach((p, i) => {
+      // detail[i] Ví dụ: "06355,20825"
+      const raw = String(detail[i] || "").trim();
+
+      if (!raw) {
+        out.numbers[p] = [];
+        return;
+      }
+
+      out.numbers[p] = raw
+        .split(",")           // Tách từng số
+        .map(v => v.trim());  // Làm sạch
+    });
 
   } catch (err) {
     console.warn("⚠ parse error:", err.message);
@@ -363,6 +372,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
