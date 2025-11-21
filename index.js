@@ -103,8 +103,7 @@ const DRAW_TIMES = {
 
 // ====================== Check Result ======================
 function checkResult(ticketNumber, results, region) {
-  // ❗ Không xoá số 0 đầu!
-  const n = ticketNumber.trim();
+  const n = ticketNumber.trim(); // giữ nguyên số, không xoá số 0 đầu
 
   const match = (arr, digits) => {
     const user = n.slice(-digits);
@@ -113,33 +112,67 @@ function checkResult(ticketNumber, results, region) {
 
   if (!results) return "⚠️ Không lấy được kết quả xổ số.";
 
-  // 🎯 Miền Bắc ĐB = 5 số, Miền Trung/Nam ĐB = 6 số
-  const digitsDB = region === "bac" ? 5 : 6;
+  // ============================
+  // 🎯 Miền Bắc (5 số)
+  // ============================
+  if (region === "bac") {
+    if (results["ĐB"] && match(results["ĐB"], 5))
+      return "🎯 Trúng Giải Đặc Biệt!";
 
-  if (results["ĐB"] && match(results["ĐB"], digitsDB))
+    if (results["G1"] && match(results["G1"], 5))
+      return "🥇 Trúng Giải Nhất!";
+
+    if (results["G2"] && match(results["G2"], 5))
+      return "🥈 Trúng Giải Nhì!";
+
+    if (results["G3"] && match(results["G3"], 5))
+      return "🥉 Trúng Giải Ba!";
+
+    if (results["G4"] && match(results["G4"], 5))
+      return "🎉 Trúng Giải 4!";
+
+    if (results["G5"] && match(results["G5"], 5))
+      return "🎉 Trúng Giải 5!";
+
+    if (results["G6"] && match(results["G6"], 3))
+      return "🎉 Trúng Giải 6!";
+
+    if (results["G7"] && match(results["G7"], 2))
+      return "🎉 Trúng Giải 7!";
+
+    return "❌ Không trúng thưởng.";
+  }
+
+  // ============================
+  // 🎯 Miền Trung / Miền Nam (6 số)
+  // ============================
+
+  if (results["ĐB"] && match(results["ĐB"], 6))
     return "🎯 Trúng Giải Đặc Biệt!";
 
-  // 🎯 Giải 1 → Giải 3 đều so 5 số
   if (results["G1"] && match(results["G1"], 5))
     return "🥇 Trúng Giải Nhất!";
+
   if (results["G2"] && match(results["G2"], 5))
     return "🥈 Trúng Giải Nhì!";
+
   if (results["G3"] && match(results["G3"], 5))
     return "🥉 Trúng Giải Ba!";
 
-  // ⭐ Các giải nhỏ theo miền
-  const prizeDigits = {
-    G4: region === "bac" ? 4 : 5,
-    G5: 4,
-    G6: region === "bac" ? 3 : 4,
-    G7: 3,
-    G8: 2
-  };
+  if (results["G4"] && match(results["G4"], 5))
+    return "🎉 Trúng Giải 4!";
 
-  for (const g in prizeDigits) {
-    if (results[g] && match(results[g], prizeDigits[g]))
-      return `🎉 Trúng ${g}!`;
-  }
+  if (results["G5"] && match(results["G5"], 4))
+    return "🎉 Trúng Giải 5!";
+
+  if (results["G6"] && match(results["G6"], 4))
+    return "🎉 Trúng Giải 6!";
+
+  if (results["G7"] && match(results["G7"], 3))
+    return "🎉 Trúng Giải 7!";
+
+  if (results["G8"] && match(results["G8"], 2))
+    return "🎉 Trúng Giải 8!";
 
   return "❌ Không trúng thưởng.";
 }
@@ -308,4 +341,5 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
