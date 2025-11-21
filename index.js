@@ -177,25 +177,49 @@ function checkResult(ticketNumber, results, region) {
   return "❌ Không trúng thưởng.";
 }
 
-function parseLotteryApiResponse(data) {
+function parseLotteryApiResponse(data, region) {
   const out = { date: null, numbers: {} };
   if (!data) return out;
 
   try {
     const container = data.t || data;
-    if (container.issueList && container.issueList.length > 0) {
-      const issue = container.issueList.find(it => it.status === 2) || container.issueList[0];
-      out.date = issue.openTime;
+    const issue = container.issueList?.find(it => it.status === 2) || container.issueList?.[0];
+    if (!issue) return out;
 
+    out.date = issue.openTime || issue.turnNum;
+
+    const detail = JSON.parse(issue.detail);
+
+    if (region === "bac") {
+      // MIỀN BẮC CHUẨN 27 GIẢI
+      const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7"];
+      const counts = [1,1,1,6,4,6,3,4];
+
+      let idx = 0;
+      prizeNames.forEach((p, i) => {
+        out.numbers[p] = detail.slice(idx, idx + counts[i]);
+        idx += counts[i];
+      });
+
+    } else {
+      // MIỀN TRUNG / NAM
       const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
-      const detail = JSON.parse(issue.detail);
+      const counts = [1,1,1,2,7,1,3,4,1];
 
-      detail.forEach((val, idx) => {
-        out.numbers[prizeNames[idx]] = String(val).split(",").map(x => x.trim());
+      let idx = 0;
+      prizeNames.forEach((p, i) => {
+        out.numbers[p] = detail.slice(idx, idx + counts[i]);
+        idx += counts[i];
       });
     }
+
+    // Chuẩn hóa
+    for (const k in out.numbers) {
+      out.numbers[k] = out.numbers[k].map(x => String(x).trim());
+    }
+
   } catch (err) {
-    console.warn("⚠️ Parse lỗi:", err.message);
+    console.warn("⚠️ Parse error:", err.message);
   }
   return out;
 }
@@ -341,5 +365,6 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
