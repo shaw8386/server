@@ -117,36 +117,51 @@ function getSchedule(region) {
 }
 
 // 🎯 Dò kết quả vé
-function checkResult(ticketNumber, results) {
+function checkResult(ticketNumber, results, region) {
   const n = ticketNumber.trim().replace(/^0+/, "");
   if (!results) return "⚠️ Không lấy được kết quả xổ số.";
 
-  const matchPrize = (arr, digits) => {
+  const match = (arr, digits) => {
     const user = n.slice(-digits);
     return arr.some(v => String(v).slice(-digits) === user);
   };
 
-  if (results["G8"] && matchPrize(results["G8"], 2))
-    return `🎉 Vé ${ticketNumber} trúng Giải 8!`;
-  if (results["G7"] && matchPrize(results["G7"], 3))
-    return `🎉 Vé ${ticketNumber} trúng Giải 7!`;
-  if (results["G6"] && matchPrize(results["G6"], 4))
-    return `🎉 Vé ${ticketNumber} trúng Giải 6!`;
-  if (results["G5"] && matchPrize(results["G5"], 5))
-    return `🎉 Vé ${ticketNumber} trúng Giải 5!`;
-  if (results["G4"] && matchPrize(results["G4"], 5))
-    return `🎉 Vé ${ticketNumber} trúng Giải 4!`;
-  if (results["G3"] && matchPrize(results["G3"], 5))
-    return `🎉 Vé ${ticketNumber} trúng Giải 3!`;
-  if (results["G2"] && matchPrize(results["G2"], 5))
-    return `🎉 Vé ${ticketNumber} trúng Giải 2!`;
-  if (results["G1"] && matchPrize(results["G1"], 5))
-    return `🎉 Vé ${ticketNumber} trúng Giải 1!`;
-  if (results["ĐB"] && matchPrize(results["ĐB"], 6))
-    return `🎯 Vé ${ticketNumber} trúng 🎖 Giải Đặc Biệt!`;
+  // 🎯 Số chữ số Đặc Biệt theo miền
+  const digitsDB = region === "bac" ? 5 : 6;
 
-  return `😢 Vé ${ticketNumber} không trúng thưởng.`;
+  // 🏆 ĐẶC BIỆT
+  if (results["ĐB"] && match(results["ĐB"], digitsDB))
+    return "🎯 Trúng Giải Đặc Biệt!";
+
+  // 🥇 Giải 1 (Miền Bắc có 5 số, Miền Trung/Nam cũng 5 số)
+  if (results["G1"] && match(results["G1"], 5))
+    return "🥇 Trúng Giải Nhất!";
+
+  // 🥈 Giải 2
+  if (results["G2"] && match(results["G2"], 5))
+    return "🥈 Trúng Giải Nhì!";
+
+  // 🥉 Giải 3
+  if (results["G3"] && match(results["G3"], 5))
+    return "🥉 Trúng Giải Ba!";
+
+  // ⭐ Các giải nhỏ
+  const prizeDigits = {
+    G4: region === "bac" ? 4 : 5,  // MB 4 số, MN/MT 5 số
+    G5: region === "bac" ? 4 : 4,
+    G6: region === "bac" ? 3 : 4,
+    G7: 3,
+    G8: 2,
+  };
+
+  for (const g in prizeDigits) {
+    if (results[g] && match(results[g], prizeDigits[g]))
+      return `🎉 Trúng ${g}!`;
+  }
+
+  return "❌ Không trúng thưởng.";
 }
+
 
 // 🎲 Parse dữ liệu kết quả từ API xoso188
 function parseLotteryApiResponse(data) {
@@ -306,6 +321,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
+
 
 
 
