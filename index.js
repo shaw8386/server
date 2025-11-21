@@ -17,7 +17,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
-// Thiết lập múi giờ VN cho mọi connection
+
 pool.on("connect", client => {
   client.query("SET TIME ZONE 'Asia/Ho_Chi_Minh';");
 });
@@ -28,7 +28,6 @@ async function initDatabase() {
     await pool.query(`SET TIME ZONE 'Asia/Ho_Chi_Minh';`);
     console.log("✅ PostgreSQL connected");
 
-    // Tạo bảng nếu chưa có
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -44,14 +43,13 @@ async function initDatabase() {
     await pool.query(createTableSQL);
     console.log("✅ Table 'tickets' ready");
 
-    // Bổ sung cột scheduled_time nếu chưa tồn tại (migrations an toàn)
     const colCheck = await pool.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_name='tickets' AND column_name='scheduled_time';
     `);
     if (colCheck.rows.length === 0) {
       await pool.query(`ALTER TABLE tickets ADD COLUMN scheduled_time TIMESTAMP;`);
-      console.log("🆕 Added 'scheduled_time' column to tickets table");
+      console.log("🆕 Added 'scheduled_time' column");
     }
   } catch (err) {
     console.error("❌ Database init error:", err.message);
@@ -72,7 +70,7 @@ try {
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     console.log("✅ Firebase Admin initialized");
   } else {
-    console.log("⚠️ FIREBASE_KEY not found — Firebase Admin chưa khởi tạo!");
+    console.log("⚠️ FIREBASE_KEY not found!");
   }
 } catch (e) {
   console.error("❌ Firebase init error:", e.message);
@@ -81,42 +79,29 @@ try {
 // ====================== ⚙️ UTILS ======================
 async function sendNotification(token, title, body) {
   if (!admin.apps.length) return;
+
+  // ❗ BỎ QUA TOKEN GIẢ / KHÔNG HỢP LỆ
+  if (!token || token === "unknown" || token.length < 20) {
+    console.log("⚠️ Bỏ qua gửi FCM — token không hợp lệ:", token);
+    return;
+  }
+
   try {
     await admin.messaging().send({ notification: { title, body }, token });
-    console.log("📤 FCM:", title, "-", body);
+    console.log("📤 FCM:", title);
   } catch (err) {
     console.warn("⚠️ Gửi FCM lỗi:", err.message);
   }
 }
 
-// 🎯 Giờ xổ của từng miền
+// ====================== Giờ xổ ======================
 const DRAW_TIMES = {
   bac: { hour: 18, minute: 35 },
   trung: { hour: 17, minute: 35 },
   nam: { hour: 16, minute: 35 },
 };
 
-// ✅ Tính thời gian delay (ms) và thời điểm hẹn — chuẩn theo giờ VN
-function getSchedule(region) {
-  const now = new Date();
-  const draw = new Date(now);
-  draw.setHours(DRAW_TIMES[region]?.hour || 18, DRAW_TIMES[region]?.minute || 35, 0, 0);
-
-  const diff = draw - now;
-  if (diff <= 0) {
-    return {
-      delay: -1,
-      scheduleTime: new Date(Date.now() + 5000),
-    };
-  }
-
-  return {
-    delay: diff,
-    scheduleTime: new Date(Date.now() + diff),
-  };
-}
-
-// 🎯 Dò kết quả vé
+// ====================== Check Result ======================
 function checkResult(ticketNumber, results, region) {
   const n = ticketNumber.trim().replace(/^0+/, "");
   if (!results) return "⚠️ Không lấy được kết quả xổ số.";
@@ -126,32 +111,24 @@ function checkResult(ticketNumber, results, region) {
     return arr.some(v => String(v).slice(-digits) === user);
   };
 
-  // 🎯 Số chữ số Đặc Biệt theo miền
   const digitsDB = region === "bac" ? 5 : 6;
 
-  // 🏆 ĐẶC BIỆT
   if (results["ĐB"] && match(results["ĐB"], digitsDB))
     return "🎯 Trúng Giải Đặc Biệt!";
 
-  // 🥇 Giải 1 (Miền Bắc có 5 số, Miền Trung/Nam cũng 5 số)
   if (results["G1"] && match(results["G1"], 5))
     return "🥇 Trúng Giải Nhất!";
-
-  // 🥈 Giải 2
   if (results["G2"] && match(results["G2"], 5))
     return "🥈 Trúng Giải Nhì!";
-
-  // 🥉 Giải 3
   if (results["G3"] && match(results["G3"], 5))
     return "🥉 Trúng Giải Ba!";
 
-  // ⭐ Các giải nhỏ
   const prizeDigits = {
-    G4: region === "bac" ? 4 : 5,  // MB 4 số, MN/MT 5 số
-    G5: region === "bac" ? 4 : 4,
+    G4: region === "bac" ? 4 : 5,
+    G5: 4,
     G6: region === "bac" ? 3 : 4,
     G7: 3,
-    G8: 2,
+    G8: 2
   };
 
   for (const g in prizeDigits) {
@@ -162,8 +139,6 @@ function checkResult(ticketNumber, results, region) {
   return "❌ Không trúng thưởng.";
 }
 
-
-// 🎲 Parse dữ liệu kết quả từ API xoso188
 function parseLotteryApiResponse(data) {
   const out = { date: null, numbers: {} };
   if (!data) return out;
@@ -172,17 +147,17 @@ function parseLotteryApiResponse(data) {
     const container = data.t || data;
     if (container.issueList && container.issueList.length > 0) {
       const issue = container.issueList.find(it => it.status === 2) || container.issueList[0];
-      out.date = issue.openTime || issue.turnNum;
+      out.date = issue.openTime;
 
-      const prizeNames = ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"];
+      const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
       const detail = JSON.parse(issue.detail);
+
       detail.forEach((val, idx) => {
-        const nums = String(val).split(",").map(x => x.trim()).filter(Boolean);
-        out.numbers[prizeNames[idx]] = nums;
+        out.numbers[prizeNames[idx]] = String(val).split(",").map(x => x.trim());
       });
     }
   } catch (err) {
-    console.warn("⚠️ parseLotteryApiResponse lỗi:", err.message);
+    console.warn("⚠️ Parse lỗi:", err.message);
   }
   return out;
 }
@@ -202,21 +177,29 @@ app.post("/api/save-ticket", async (req, res) => {
     drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
     // ================================
-    // 1️⃣ VÉ CŨ (ngày mua trước hôm nay)
+    // 1️⃣ VÉ CŨ → DÒ NGAY
     // ================================
     if (buyDate < new Date(today.toDateString())) {
       console.log("🎯 Vé cũ → DÒ NGAY");
 
-      setTimeout(() => checkAndNotify({ number, station, token, region }), 1000);
+      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
+      const resp = await fetch(apiUrl);
+      const txt = await resp.text();
 
-      const parsed = parseLotteryApiResponse(data);
+      let dataParsed;
+      try { dataParsed = JSON.parse(txt); }
+      catch { dataParsed = null; }
+
+      const parsed = parseLotteryApiResponse(dataParsed);
       const resultText = checkResult(number, parsed.numbers, region);
-      
+
+      sendNotification(token, "🎟️ Kết quả vé số", resultText);
+
       return res.json({
         success: true,
         mode: "immediate",
         message: "Vé đã có kết quả — dò ngay",
-        result: resultText   // ⭐ Gửi về kết quả thật
+        result: resultText
       });
     }
 
@@ -224,14 +207,26 @@ app.post("/api/save-ticket", async (req, res) => {
     // 2️⃣ VÉ HÔM NAY nhưng đã qua giờ xổ
     // ================================
     if (buyDate.toDateString() === today.toDateString() && today > drawTime) {
-      console.log("🎯 Vé hôm nay nhưng đã qua giờ xổ → DÒ NGAY");
+      console.log("🎯 Vé hôm nay đã qua giờ xổ → DÒ NGAY");
 
-      setTimeout(() => checkAndNotify({ number, station, token, region }), 1000);
+      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
+      const resp = await fetch(apiUrl);
+      const txt = await resp.text();
+
+      let dataParsed;
+      try { dataParsed = JSON.parse(txt); }
+      catch { dataParsed = null; }
+
+      const parsed = parseLotteryApiResponse(dataParsed);
+      const resultText = checkResult(number, parsed.numbers, region);
+
+      sendNotification(token, "🎟️ Kết quả vé số", resultText);
 
       return res.json({
         success: true,
         mode: "immediate",
-        message: "Đã qua giờ xổ — dò ngay"
+        message: "Đã qua giờ xổ — dò ngay",
+        result: resultText
       });
     }
 
@@ -253,8 +248,8 @@ app.post("/api/save-ticket", async (req, res) => {
     return res.json({
       success: true,
       mode: "scheduled",
-      message: "Vé chưa xổ — đã đặt lịch",
-      scheduled_time: drawTime.toLocaleString("vi-VN")
+      scheduled_time: drawTime.toLocaleString("vi-VN"),
+      message: "Vé chưa xổ — đã đặt lịch"
     });
 
   } catch (err) {
@@ -263,75 +258,48 @@ app.post("/api/save-ticket", async (req, res) => {
   }
 });
 
-
-
-// ====================== 🎯 CHECK & NOTIFY ======================
+// ====================== CHECK & NOTIFY ======================
 async function checkAndNotify({ number, station, token, region }) {
   try {
-    const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${encodeURIComponent(station)}`;
-    console.log("📡 Gọi API kết quả:", apiUrl);
+    const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
+    console.log("📡 Gọi API:", apiUrl);
 
     const response = await fetch(apiUrl);
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.warn("⚠️ Không parse được JSON, preview:", text.slice(0, 300));
-      data = null;
-    }
+    const txt = await response.text();
 
-    const parsed = parseLotteryApiResponse(data);
-    if (!parsed.numbers || Object.keys(parsed.numbers).length === 0) {
-      await sendNotification(token, "📢 Kết quả vé số", "⚠️ Chưa có kết quả xổ số hôm nay.");
-      return;
-    }
+    let dataParsed;
+    try { dataParsed = JSON.parse(txt); }
+    catch { dataParsed = null; }
+
+    const parsed = parseLotteryApiResponse(dataParsed);
 
     const resultText = checkResult(number, parsed.numbers, region);
-    await sendNotification(token, "🎟️ Kết quả vé số của bạn", resultText);
+
+    sendNotification(token, "🎟️ Kết quả vé số", resultText);
+
   } catch (err) {
     console.error("❌ Lỗi check vé:", err.message);
-    await sendNotification(token, "📢 Kết quả vé số", `⚠️ Lỗi khi kiểm tra: ${err.message}`);
   }
 }
 
-// ====================== 🌐 PROXY API ======================
+// ====================== PROXY ======================
 const TARGET_BASE = "https://xoso188.net";
 app.use("/api", async (req, res) => {
   const targetUrl = TARGET_BASE + req.originalUrl;
   console.log("→ Forwarding:", targetUrl);
   try {
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers: { ...req.headers, host: "xoso188.net" },
-      body: ["GET", "HEAD"].includes(req.method) ? null : req.body,
-    });
+    const response = await fetch(targetUrl);
     const body = await response.text();
-    res.status(response.status);
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.set("Content-Type", response.headers.get("content-type") || "application/json");
-    res.send(body);
+    res.status(response.status).send(body);
   } catch (err) {
-    console.error("Proxy error:", err);
     res.status(500).json({ error: "Proxy failed", message: err.message });
   }
 });
 
-// ====================== 🏠 ROOT ======================
+// ====================== ROOT ======================
 app.get("/", (_, res) =>
-  res.send("✅ Railway FCM + Ticket DB + Auto Schedule by Region + scheduled_time log hoạt động!")
+  res.send("✅ Railway Lottery Server Running")
 );
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Server chạy tại port " + PORT));
-
-
-
-
-
-
-
-
-
-
+app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
