@@ -103,19 +103,23 @@ const DRAW_TIMES = {
 
 // ====================== Check Result ======================
 function checkResult(ticketNumber, results, region) {
-  const n = ticketNumber.trim().replace(/^0+/, "");
-  if (!results) return "⚠️ Không lấy được kết quả xổ số.";
+  // ❗ Không xoá số 0 đầu!
+  const n = ticketNumber.trim();
 
   const match = (arr, digits) => {
     const user = n.slice(-digits);
-    return arr.some(v => String(v).slice(-digits) === user);
+    return arr.some(v => String(v).trim().slice(-digits) === user);
   };
 
+  if (!results) return "⚠️ Không lấy được kết quả xổ số.";
+
+  // 🎯 Miền Bắc ĐB = 5 số, Miền Trung/Nam ĐB = 6 số
   const digitsDB = region === "bac" ? 5 : 6;
 
   if (results["ĐB"] && match(results["ĐB"], digitsDB))
     return "🎯 Trúng Giải Đặc Biệt!";
 
+  // 🎯 Giải 1 → Giải 3 đều so 5 số
   if (results["G1"] && match(results["G1"], 5))
     return "🥇 Trúng Giải Nhất!";
   if (results["G2"] && match(results["G2"], 5))
@@ -123,6 +127,7 @@ function checkResult(ticketNumber, results, region) {
   if (results["G3"] && match(results["G3"], 5))
     return "🥉 Trúng Giải Ba!";
 
+  // ⭐ Các giải nhỏ theo miền
   const prizeDigits = {
     G4: region === "bac" ? 4 : 5,
     G5: 4,
@@ -303,3 +308,4 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
