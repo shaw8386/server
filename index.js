@@ -183,46 +183,44 @@ function parseLotteryApiResponse(data, region) {
 
   try {
     const container = data.t || data;
-    const issue = container.issueList?.find(it => it.status === 2) || container.issueList?.[0];
-    if (!issue) return out;
+    const issueList = container.issueList;
+    if (!issueList || issueList.length === 0) return out;
 
+    const issue = issueList.find(i => i.status === 2) || issueList[0];
     out.date = issue.openTime || issue.turnNum;
 
     const detail = JSON.parse(issue.detail);
 
     if (region === "bac") {
-      // MIỀN BẮC CHUẨN 27 GIẢI
+      // Miền Bắc 27 số
       const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7"];
       const counts = [1,1,1,6,4,6,3,4];
 
-      let idx = 0;
+      let start = 0;
       prizeNames.forEach((p, i) => {
-        out.numbers[p] = detail.slice(idx, idx + counts[i]);
-        idx += counts[i];
+        out.numbers[p] = detail.slice(start, start + counts[i]).map(x => String(x).trim());
+        start += counts[i];
       });
 
     } else {
-      // MIỀN TRUNG / NAM
+      // Miền Trung / Nam
       const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
       const counts = [1,1,1,2,7,1,3,4,1];
 
-      let idx = 0;
+      let start = 0;
       prizeNames.forEach((p, i) => {
-        out.numbers[p] = detail.slice(idx, idx + counts[i]);
-        idx += counts[i];
+        out.numbers[p] = detail.slice(start, start + counts[i]).map(x => String(x).trim());
+        start += counts[i];
       });
     }
 
-    // Chuẩn hóa
-    for (const k in out.numbers) {
-      out.numbers[k] = out.numbers[k].map(x => String(x).trim());
-    }
-
   } catch (err) {
-    console.warn("⚠️ Parse error:", err.message);
+    console.warn("⚠ parse error:", err.message);
   }
+
   return out;
 }
+
 
 // ====================== 🎟️ SAVE TICKET ======================
 app.post("/api/save-ticket", async (req, res) => {
@@ -365,6 +363,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
