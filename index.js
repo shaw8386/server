@@ -197,24 +197,24 @@ app.post("/api/save-ticket", async (req, res) => {
 
     // ======================== DÒ NGAY ========================
     // if (drawTime <= now) {
-      console.log("🎯 Vé cũ hoặc đã tới giờ xổ → DÒ NGAY");
+      // console.log("🎯 Vé cũ hoặc đã tới giờ xổ → DÒ NGAY");
 
-      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
-      const resp = await fetch(apiUrl);
-      const txt = await resp.text();
-      let dataParsed;
-      try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
+      // const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
+      // const resp = await fetch(apiUrl);
+      // const txt = await resp.text();
+      // let dataParsed;
+      // try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
 
-      const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
-      const resultText = checkResult(number, parsed.numbers, region);
+      // const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
+      // const resultText = checkResult(number, parsed.numbers, region);
 
-      sendNotification(token, "🎟️ Kết quả vé số", resultText);
+      // sendNotification(token, "🎟️ Kết quả vé số", resultText);
 
-      return res.json({
-        success: true,
-        mode: "immediate",
-        result: resultText
-      });
+      // return res.json({
+      //   success: true,
+      //   mode: "immediate",
+      //   result: resultText
+      // });
     // }
 
     // ======================== ĐẶT LỊCH ========================
@@ -307,6 +307,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
