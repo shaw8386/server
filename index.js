@@ -26,7 +26,8 @@ pool.on("connect", client => {
 async function initDatabase() {
   try {
     await pool.connect();
-    await pool.query(`SET TIME ZONE 'Asia/Ho_Chi_Minh';`);
+    await pool.query("SET TIME ZONE 'Asia/Ho_Chi_Minh';");
+
     console.log("✅ PostgreSQL connected");
 
     await pool.query(`
@@ -44,7 +45,6 @@ async function initDatabase() {
       );
     `);
 
-    console.log("✅ Table 'tickets' ready");
   } catch (err) {
     console.error("❌ Database init error:", err.message);
   }
@@ -75,7 +75,7 @@ async function sendNotification(token, title, body) {
   if (!admin.apps.length) return;
 
   if (!token || token === "unknown" || token.length < 20) {
-    console.log("⚠️ Bỏ qua gửi FCM — token không hợp lệ:", token);
+    console.log("⚠️ Bỏ qua gửi FCM — token không hợp lệ");
     return;
   }
 
@@ -116,7 +116,6 @@ function checkResult(ticketNumber, results, region) {
     return "❌ Không trúng thưởng.";
   }
 
-  // MIỀN TRUNG/NAM
   if (results["ĐB"] && match(results["ĐB"], 6)) return "🎯 Trúng Giải Đặc Biệt!";
   if (results["G1"] && match(results["G1"], 5)) return "🥇 Trúng Giải Nhất!";
   if (results["G2"] && match(results["G2"], 5)) return "🥈 Trúng Giải Nhì!";
@@ -147,10 +146,7 @@ function parseLotteryApiResponse(data, region, ticketDateStr) {
       issue = data.t.issueList.find(i => i.turnNum === target);
     }
 
-    if (!issue) {
-      issue = data.t.issueList[0];
-      console.warn("⚠ Không đúng ngày → fallback kỳ mới nhất");
-    }
+    if (!issue) issue = data.t.issueList[0];
 
     out.date = issue.openTime;
     const detail = JSON.parse(issue.detail);
@@ -162,8 +158,7 @@ function parseLotteryApiResponse(data, region, ticketDateStr) {
 
     detail.forEach((raw, idx) => {
       const prize = prizeNames[idx];
-      if (!prize) return;
-      out.numbers[prize] = raw.split(",").map(v => v.trim());
+      if (prize) out.numbers[prize] = raw.split(",").map(v => v.trim());
     });
 
   } catch (err) {
@@ -184,38 +179,9 @@ app.post("/api/save-ticket", async (req, res) => {
     const now = new Date();
     const buyDate = new Date(buy_date);
 
-    if (!DRAW_TIMES[region])
-      return res.status(400).json({ success: false, message: "region không hợp lệ" });
-
-    // Tạo thời gian xổ theo ngày mua
-    // let drawTime = new Date(buyDate);
-    // drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
-
-    // ======================== TEST MODE (RÚT NGẮN LỊCH) ========================
-    let drawTime = new Date(Date.now() + 10 * 1000); // 1 phút
-    console.log("🧪 TEST MODE: Lịch rút gọn còn 1 phút");
-
-    // ======================== DÒ NGAY ========================
-    // if (drawTime <= now) {
-      // console.log("🎯 Vé cũ hoặc đã tới giờ xổ → DÒ NGAY");
-
-      // const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
-      // const resp = await fetch(apiUrl);
-      // const txt = await resp.text();
-      // let dataParsed;
-      // try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
-
-      // const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
-      // const resultText = checkResult(number, parsed.numbers, region);
-
-      // sendNotification(token, "🎟️ Kết quả vé số", resultText);
-
-      // return res.json({
-      //   success: true,
-      //   mode: "immediate",
-      //   result: resultText
-      // });
-    // }
+    // Tạo thời gian xổ thật theo lịch
+    let drawTime = new Date(buyDate);
+    drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
     // ======================== ĐẶT LỊCH ========================
     const delay = drawTime - now;
@@ -230,22 +196,18 @@ app.post("/api/save-ticket", async (req, res) => {
 
     setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), delay);
 
-    setTimeout(() => {
-      const resultText = checkResult(number, parsed.numbers, region);
-      return res.json({
-        success: true,
-        mode: "immediate",
-        result: resultText,
-        scheduled_time: drawTime.toLocaleString("vi-VN"),
-        message: "Vé chưa xổ — đã đặt lịch"
-      });
-    }, 12 * 1000);
-    
-      } catch (err) {
-        console.error("❌ save-ticket error:", err);
-        res.status(500).json({ success: false, error: err.message });
-      }
+    res.json({
+      success: true,
+      mode: "scheduled",
+      scheduled_time: drawTime.toLocaleString("vi-VN"),
+      message: "Vé chưa xổ — đã đặt lịch"
     });
+
+  } catch (err) {
+    console.error("❌ save-ticket error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ====================== CHECK & NOTIFY ======================
 async function checkAndNotify({ number, station, token, region, buy_date }) {
@@ -272,8 +234,7 @@ async function checkAndNotify({ number, station, token, region, buy_date }) {
 setInterval(async () => {
   const now = new Date();
   const { rows } = await pool.query(
-    `SELECT * FROM tickets 
-     WHERE processed = FALSE AND scheduled_time <= $1`,
+    `SELECT * FROM tickets WHERE processed = FALSE AND scheduled_time <= $1`,
     [now]
   );
 
@@ -295,7 +256,6 @@ setInterval(async () => {
 const TARGET_BASE = "https://xoso188.net";
 app.use("/api", async (req, res) => {
   const targetUrl = TARGET_BASE + req.originalUrl;
-  console.log("→ Forwarding:", targetUrl);
   try {
     const response = await fetch(targetUrl);
     const body = await response.text();
@@ -306,25 +266,7 @@ app.use("/api", async (req, res) => {
 });
 
 // ====================== ROOT ======================
-app.get("/", (_, res) =>
-  res.send("✅ Railway Lottery Server Running")
-);
+app.get("/", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
