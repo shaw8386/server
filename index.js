@@ -231,6 +231,7 @@ app.post("/api/save-ticket", async (req, res) => {
     setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), delay);
 
     setTimeout(() => {
+      const resultText = checkResult(number, parsed.numbers, region);
       return res.json({
         success: true,
         mode: "immediate",
@@ -311,6 +312,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
