@@ -191,37 +191,44 @@ function parseLotteryApiResponse(data, region) {
 
     const detail = JSON.parse(issue.detail);
 
-    // Miền Bắc → mỗi phần tử là 1 số, dễ
+    // ===============================
+    // 🟥 MIỀN BẮC — MẢNG 27 số
+    // ===============================
     if (region === "bac") {
-      const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7"];
-      const counts = [1,1,1,6,4,6,3,4];
+      const counts = { ĐB:1, G1:1, G2:1, G3:6, G4:4, G5:6, G6:3, G7:4 };
+      let pos = 0;
 
-      let start = 0;
-      prizeNames.forEach((p, i) => {
-        out.numbers[p] = detail
-          .slice(start, start + counts[i])
-          .map(x => String(x).trim());
-        start += counts[i];
-      });
+      for (let key of Object.keys(counts)) {
+        const c = counts[key];
+        out.numbers[key] = detail.slice(pos, pos + c).map(x => String(x).trim());
+        pos += c;
+      }
       return out;
     }
 
-    // Miền Trung / Miền Nam → mỗi mục detail là chuỗi chứa nhiều số
-    const prizeNames = ["ĐB","G1","G2","G3","G4","G5","G6","G7","G8"];
+    // ===============================
+    // 🟩 MIỀN TRUNG / MIỀN NAM
+    // DỮ LIỆU LÀ 27 MỤC, PHẢI GHÉP TỪNG GIẢI
+    // ===============================
 
-    prizeNames.forEach((p, i) => {
-      // detail[i] Ví dụ: "06355,20825"
-      const raw = String(detail[i] || "").trim();
+    const counts = {
+      ĐB: 1,
+      G1: 1,
+      G2: 1,
+      G3: 2,
+      G4: 7,
+      G5: 1,
+      G6: 3,
+      G7: 4,
+      G8: 1
+    };
 
-      if (!raw) {
-        out.numbers[p] = [];
-        return;
-      }
-
-      out.numbers[p] = raw
-        .split(",")           // Tách từng số
-        .map(v => v.trim());  // Làm sạch
-    });
+    let pos = 0;
+    for (let key of Object.keys(counts)) {
+      const c = counts[key];
+      out.numbers[key] = detail.slice(pos, pos + c).map(x => String(x).trim());
+      pos += c;
+    }
 
   } catch (err) {
     console.warn("⚠ parse error:", err.message);
@@ -229,7 +236,6 @@ function parseLotteryApiResponse(data, region) {
 
   return out;
 }
-
 
 // ====================== 🎟️ SAVE TICKET ======================
 app.post("/api/save-ticket", async (req, res) => {
@@ -372,6 +378,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
