@@ -192,10 +192,8 @@ app.post("/api/save-ticket", async (req, res) => {
     drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
     // ======================== TEST MODE (RÚT NGẮN LỊCH) ========================
-    if (process.env.TEST_MODE === "true") {
-      drawTime = new Date(Date.now() + 60 * 1000); // 1 phút
-      console.log("🧪 TEST MODE: Lịch rút gọn còn 1 phút");
-    }
+    drawTime = new Date(Date.now() + 60 * 1000); // 1 phút
+    console.log("🧪 TEST MODE: Lịch rút gọn còn 1 phút");
 
     // ======================== DÒ NGAY ========================
     if (drawTime <= now) {
@@ -308,3 +306,4 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
