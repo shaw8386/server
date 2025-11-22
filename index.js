@@ -1,4 +1,4 @@
-// index.js
+// ====================== IMPORTS ======================
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
@@ -9,6 +9,7 @@ import pkg from "pg";
 process.env.TZ = "Asia/Ho_Chi_Minh";
 const { Pool } = pkg;
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -28,7 +29,7 @@ async function initDatabase() {
     await pool.query(`SET TIME ZONE 'Asia/Ho_Chi_Minh';`);
     console.log("✅ PostgreSQL connected");
 
-    const createTableSQL = `
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
         ticket_number VARCHAR(20) NOT NULL,
@@ -37,27 +38,20 @@ async function initDatabase() {
         label VARCHAR(100),
         token TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        scheduled_time TIMESTAMP
+        scheduled_time TIMESTAMP,
+        processed BOOLEAN DEFAULT FALSE,
+        buy_date VARCHAR(20)
       );
-    `;
-    await pool.query(createTableSQL);
-    console.log("✅ Table 'tickets' ready");
-
-    const colCheck = await pool.query(`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name='tickets' AND column_name='scheduled_time';
     `);
-    if (colCheck.rows.length === 0) {
-      await pool.query(`ALTER TABLE tickets ADD COLUMN scheduled_time TIMESTAMP;`);
-      console.log("🆕 Added 'scheduled_time' column");
-    }
+
+    console.log("✅ Table 'tickets' ready");
   } catch (err) {
     console.error("❌ Database init error:", err.message);
   }
 }
 initDatabase();
 
-// ====================== 🔥 FIREBASE ADMIN ======================
+// ====================== 🔥 FIREBASE ======================
 try {
   let serviceAccount;
   if (process.env.FIREBASE_KEY) {
@@ -76,11 +70,10 @@ try {
   console.error("❌ Firebase init error:", e.message);
 }
 
-// ====================== ⚙️ UTILS ======================
+// ====================== UTILS ======================
 async function sendNotification(token, title, body) {
   if (!admin.apps.length) return;
 
-  // ❗ BỎ QUA TOKEN GIẢ / KHÔNG HỢP LỆ
   if (!token || token === "unknown" || token.length < 20) {
     console.log("⚠️ Bỏ qua gửi FCM — token không hợp lệ:", token);
     return;
@@ -94,17 +87,16 @@ async function sendNotification(token, title, body) {
   }
 }
 
-// ====================== Giờ xổ ======================
+// ====================== GIỜ XỔ ======================
 const DRAW_TIMES = {
   bac: { hour: 18, minute: 35 },
   trung: { hour: 17, minute: 35 },
   nam: { hour: 16, minute: 35 },
 };
 
-// ====================== Check Result ======================
+// ====================== CHECK RESULT ======================
 function checkResult(ticketNumber, results, region) {
-  const n = ticketNumber.trim(); // giữ nguyên số, không xoá số 0 đầu
-
+  const n = ticketNumber.trim();
   const match = (arr, digits) => {
     const user = n.slice(-digits);
     return arr.some(v => String(v).trim().slice(-digits) === user);
@@ -112,132 +104,76 @@ function checkResult(ticketNumber, results, region) {
 
   if (!results) return "⚠️ Không lấy được kết quả xổ số.";
 
-  // ============================
-  // 🎯 Miền Bắc (5 số)
-  // ============================
   if (region === "bac") {
-    if (results["ĐB"] && match(results["ĐB"], 5))
-      return "🎯 Trúng Giải Đặc Biệt!";
-
-    if (results["G1"] && match(results["G1"], 5))
-      return "🥇 Trúng Giải Nhất!";
-
-    if (results["G2"] && match(results["G2"], 5))
-      return "🥈 Trúng Giải Nhì!";
-
-    if (results["G3"] && match(results["G3"], 5))
-      return "🥉 Trúng Giải Ba!";
-
-    if (results["G4"] && match(results["G4"], 5))
-      return "🎉 Trúng Giải 4!";
-
-    if (results["G5"] && match(results["G5"], 5))
-      return "🎉 Trúng Giải 5!";
-
-    if (results["G6"] && match(results["G6"], 3))
-      return "🎉 Trúng Giải 6!";
-
-    if (results["G7"] && match(results["G7"], 2))
-      return "🎉 Trúng Giải 7!";
-
+    if (results["ĐB"] && match(results["ĐB"], 5)) return "🎯 Trúng Giải Đặc Biệt!";
+    if (results["G1"] && match(results["G1"], 5)) return "🥇 Trúng Giải Nhất!";
+    if (results["G2"] && match(results["G2"], 5)) return "🥈 Trúng Giải Nhì!";
+    if (results["G3"] && match(results["G3"], 5)) return "🥉 Trúng Giải Ba!";
+    if (results["G4"] && match(results["G4"], 4)) return "🎉 Trúng Giải 4!";
+    if (results["G5"] && match(results["G5"], 4)) return "🎉 Trúng Giải 5!";
+    if (results["G6"] && match(results["G6"], 3)) return "🎉 Trúng Giải 6!";
+    if (results["G7"] && match(results["G7"], 2)) return "🎉 Trúng Giải 7!";
     return "❌ Không trúng thưởng.";
   }
 
-  // ============================
-  // 🎯 Miền Trung / Miền Nam (6 số)
-  // ============================
-
-  if (results["ĐB"] && match(results["ĐB"], 6))
-    return "🎯 Trúng Giải Đặc Biệt!";
-
-  if (results["G1"] && match(results["G1"], 5))
-    return "🥇 Trúng Giải Nhất!";
-
-  if (results["G2"] && match(results["G2"], 5))
-    return "🥈 Trúng Giải Nhì!";
-
-  if (results["G3"] && match(results["G3"], 5))
-    return "🥉 Trúng Giải Ba!";
-
-  if (results["G4"] && match(results["G4"], 5))
-    return "🎉 Trúng Giải 4!";
-
-  if (results["G5"] && match(results["G5"], 4))
-    return "🎉 Trúng Giải 5!";
-
-  if (results["G6"] && match(results["G6"], 4))
-    return "🎉 Trúng Giải 6!";
-
-  if (results["G7"] && match(results["G7"], 3))
-    return "🎉 Trúng Giải 7!";
-
-  if (results["G8"] && match(results["G8"], 2))
-    return "🎉 Trúng Giải 8!";
+  // MIỀN TRUNG/NAM
+  if (results["ĐB"] && match(results["ĐB"], 6)) return "🎯 Trúng Giải Đặc Biệt!";
+  if (results["G1"] && match(results["G1"], 5)) return "🥇 Trúng Giải Nhất!";
+  if (results["G2"] && match(results["G2"], 5)) return "🥈 Trúng Giải Nhì!";
+  if (results["G3"] && match(results["G3"], 5)) return "🥉 Trúng Giải Ba!";
+  if (results["G4"] && match(results["G4"], 5)) return "🎉 Trúng Giải 4!";
+  if (results["G5"] && match(results["G5"], 4)) return "🎉 Trúng Giải 5!";
+  if (results["G6"] && match(results["G6"], 4)) return "🎉 Trúng Giải 6!";
+  if (results["G7"] && match(results["G7"], 3)) return "🎉 Trúng Giải 7!";
+  if (results["G8"] && match(results["G8"], 2)) return "🎉 Trúng Giải 8!";
 
   return "❌ Không trúng thưởng.";
 }
 
-function parseLotteryApiResponse(data, region) {
+// ====================== PARSE DATA ======================
+function parseLotteryApiResponse(data, region, ticketDateStr) {
   const out = { date: null, numbers: {} };
-  if (!data) return out;
+  if (!data || !data.t || !data.t.issueList || data.t.issueList.length === 0) return out;
 
   try {
-    const container = data.t || data;
-    const issueList = container.issueList;
-    if (!issueList || issueList.length === 0) return out;
+    let issue;
 
-    const issue = issueList.find(i => i.status === 2) || issueList[0];
-    out.date = issue.openTime || issue.turnNum;
+    if (ticketDateStr) {
+      let target = ticketDateStr;
+      if (ticketDateStr.includes("-")) {
+        const [y, m, d] = ticketDateStr.split("-");
+        target = `${d}/${m}/${y}`;
+      }
+      issue = data.t.issueList.find(i => i.turnNum === target);
+    }
 
+    if (!issue) {
+      issue = data.t.issueList[0];
+      console.warn("⚠ Không đúng ngày → fallback kỳ mới nhất");
+    }
+
+    out.date = issue.openTime;
     const detail = JSON.parse(issue.detail);
 
-    // ===============================
-    // 🟥 MIỀN BẮC — MẢNG 27 số
-    // ===============================
-    if (region === "bac") {
-      const counts = { ĐB:1, G1:1, G2:1, G3:6, G4:4, G5:6, G6:3, G7:4 };
-      let pos = 0;
+    const prizeNames =
+      region === "bac"
+        ? ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7"]
+        : ["ĐB", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"];
 
-      for (let key of Object.keys(counts)) {
-        const c = counts[key];
-        out.numbers[key] = detail.slice(pos, pos + c).map(x => String(x).trim());
-        pos += c;
-      }
-      return out;
-    }
-
-    // ===============================
-    // 🟩 MIỀN TRUNG / MIỀN NAM
-    // DỮ LIỆU LÀ 27 MỤC, PHẢI GHÉP TỪNG GIẢI
-    // ===============================
-
-    const counts = {
-      ĐB: 1,
-      G1: 1,
-      G2: 1,
-      G3: 2,
-      G4: 7,
-      G5: 1,
-      G6: 3,
-      G7: 4,
-      G8: 1
-    };
-
-    let pos = 0;
-    for (let key of Object.keys(counts)) {
-      const c = counts[key];
-      out.numbers[key] = detail.slice(pos, pos + c).map(x => String(x).trim());
-      pos += c;
-    }
+    detail.forEach((raw, idx) => {
+      const prize = prizeNames[idx];
+      if (!prize) return;
+      out.numbers[prize] = raw.split(",").map(v => v.trim());
+    });
 
   } catch (err) {
-    console.warn("⚠ parse error:", err.message);
+    console.error("❌ parse FE error:", err);
   }
 
   return out;
 }
 
-// ====================== 🎟️ SAVE TICKET ======================
+// ====================== SAVE TICKET ======================
 app.post("/api/save-ticket", async (req, res) => {
   try {
     const { number, region, station, label, token, buy_date } = req.body;
@@ -245,27 +181,27 @@ app.post("/api/save-ticket", async (req, res) => {
     if (!number || !region || !station || !token || !buy_date)
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
 
+    const now = new Date();
     const buyDate = new Date(buy_date);
-    const today = new Date();
 
-    const drawTime = new Date();
+    if (!DRAW_TIMES[region])
+      return res.status(400).json({ success: false, message: "region không hợp lệ" });
+
+    // Tạo thời gian xổ theo ngày mua
+    const drawTime = new Date(buyDate);
     drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
-    // ================================
-    // 1️⃣ VÉ CŨ → DÒ NGAY
-    // ================================
-    if (buyDate < new Date(today.toDateString())) {
-      console.log("🎯 Vé cũ → DÒ NGAY");
+    // ======================== DÒ NGAY ========================
+    if (drawTime <= now) {
+      console.log("🎯 Vé cũ hoặc đã tới giờ xổ → DÒ NGAY");
 
-      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
+      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
       const resp = await fetch(apiUrl);
       const txt = await resp.text();
-
       let dataParsed;
-      try { dataParsed = JSON.parse(txt); }
-      catch { dataParsed = null; }
+      try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
 
-      const parsed = parseLotteryApiResponse(dataParsed, region);
+      const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
       const resultText = checkResult(number, parsed.numbers, region);
 
       sendNotification(token, "🎟️ Kết quả vé số", resultText);
@@ -273,52 +209,22 @@ app.post("/api/save-ticket", async (req, res) => {
       return res.json({
         success: true,
         mode: "immediate",
-        message: "Vé đã có kết quả — dò ngay",
         result: resultText
       });
     }
 
-    // ================================
-    // 2️⃣ VÉ HÔM NAY nhưng đã qua giờ xổ
-    // ================================
-    if (buyDate.toDateString() === today.toDateString() && today > drawTime) {
-      console.log("🎯 Vé hôm nay đã qua giờ xổ → DÒ NGAY");
-
-      const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
-      const resp = await fetch(apiUrl);
-      const txt = await resp.text();
-
-      let dataParsed;
-      try { dataParsed = JSON.parse(txt); }
-      catch { dataParsed = null; }
-
-      const parsed = parseLotteryApiResponse(dataParsed, region);
-      const resultText = checkResult(number, parsed.numbers, region);
-
-      sendNotification(token, "🎟️ Kết quả vé số", resultText);
-
-      return res.json({
-        success: true,
-        mode: "immediate",
-        message: "Đã qua giờ xổ — dò ngay",
-        result: resultText
-      });
-    }
-
-    // ================================
-    // 3️⃣ VÉ MỚI — LÊN LỊCH
-    // ================================
-    const delay = drawTime - today;
+    // ======================== ĐẶT LỊCH ========================
+    const delay = drawTime - now;
 
     await pool.query(
-      `INSERT INTO tickets (ticket_number, region, station, label, token, scheduled_time)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [number, region, station, label, token, drawTime]
+      `INSERT INTO tickets (ticket_number, region, station, label, token, scheduled_time, buy_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [number, region, station, label, token, drawTime, buy_date]
     );
 
     console.log("⏳ Đặt lịch sau", delay / 1000, "giây");
 
-    setTimeout(() => checkAndNotify({ number, station, token, region }), delay);
+    setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), delay);
 
     return res.json({
       success: true,
@@ -334,20 +240,15 @@ app.post("/api/save-ticket", async (req, res) => {
 });
 
 // ====================== CHECK & NOTIFY ======================
-async function checkAndNotify({ number, station, token, region }) {
+async function checkAndNotify({ number, station, token, region, buy_date }) {
   try {
-    const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=1&gameCode=${station}`;
-    console.log("📡 Gọi API:", apiUrl);
-
-    const response = await fetch(apiUrl);
-    const txt = await response.text();
-
+    const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
+    const resp = await fetch(apiUrl);
+    const txt = await resp.text();
     let dataParsed;
-    try { dataParsed = JSON.parse(txt); }
-    catch { dataParsed = null; }
+    try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
 
-    const parsed = parseLotteryApiResponse(dataParsed, region);
-
+    const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
     const resultText = checkResult(number, parsed.numbers, region);
 
     sendNotification(token, "🎟️ Kết quả vé số", resultText);
@@ -356,6 +257,29 @@ async function checkAndNotify({ number, station, token, region }) {
     console.error("❌ Lỗi check vé:", err.message);
   }
 }
+
+// ====================== JOB DỰ PHÒNG SAU RESTART ======================
+setInterval(async () => {
+  const now = new Date();
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets 
+     WHERE processed = FALSE AND scheduled_time <= $1`,
+    [now]
+  );
+
+  for (const t of rows) {
+    console.log("📌 Chạy lại vé bị quên sau restart >", t.id);
+    await checkAndNotify({
+      number: t.ticket_number,
+      station: t.station,
+      token: t.token,
+      region: t.region,
+      buy_date: t.buy_date,
+    });
+
+    await pool.query(`UPDATE tickets SET processed = TRUE WHERE id = $1`, [t.id]);
+  }
+}, 60 * 1000);
 
 // ====================== PROXY ======================
 const TARGET_BASE = "https://xoso188.net";
@@ -378,10 +302,3 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
-
-
-
-
-
-
-
