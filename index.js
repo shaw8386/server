@@ -188,8 +188,8 @@ app.post("/api/save-ticket", async (req, res) => {
       return res.status(400).json({ success: false, message: "region không hợp lệ" });
 
     // Tạo thời gian xổ theo ngày mua
-    let drawTime = new Date(buyDate);
-    drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
+    // let drawTime = new Date(buyDate);
+    // drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
     // ======================== TEST MODE (RÚT NGẮN LỊCH) ========================
     drawTime = new Date(Date.now() + 60 * 1000); // 1 phút
@@ -306,4 +306,5 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
