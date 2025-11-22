@@ -80,7 +80,18 @@ async function sendNotification(token, title, body) {
   }
 
   try {
-    await admin.messaging().send({ notification: { title, body }, token });
+    await admin.messaging().send({
+      token,
+      notification: {
+        title: "Kết quả vé số",
+        body: resultText
+      },
+      data: {
+        type: "lottery_result",
+        number,
+        status: resultText.includes("Trúng") ? "V" : "X"
+      }
+    });
     console.log("📤 FCM:", title);
   } catch (err) {
     console.warn("⚠️ Gửi FCM lỗi:", err.message);
@@ -257,11 +268,6 @@ async function checkAndNotify({ number, station, token, region, buy_date }) {
 
     sendNotification(token, "🎟️ Kết quả vé số", resultText);
     await pool.query(`UPDATE tickets SET processed = TRUE WHERE ticket_number=$1`, [number]);
-    return res.json({
-        success: true,
-        mode: "immediate",
-        result: resultText
-      });
 
   } catch (err) {
     console.error("❌ Lỗi check vé:", err.message);
@@ -312,6 +318,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
