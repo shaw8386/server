@@ -230,18 +230,20 @@ app.post("/api/save-ticket", async (req, res) => {
 
     setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), delay);
 
-    return res.json({
-      success: true,
-      mode: "immediate",
-      scheduled_time: drawTime.toLocaleString("vi-VN"),
-      message: "Vé chưa xổ — đã đặt lịch"
+    setTimeout(() => {
+      return res.json({
+        success: true,
+        mode: "immediate",
+        scheduled_time: drawTime.toLocaleString("vi-VN"),
+        message: "Vé chưa xổ — đã đặt lịch"
+      });
+    }, 12 * 1000);
+    
+      } catch (err) {
+        console.error("❌ save-ticket error:", err);
+        res.status(500).json({ success: false, error: err.message });
+      }
     });
-
-  } catch (err) {
-    console.error("❌ save-ticket error:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 // ====================== CHECK & NOTIFY ======================
 async function checkAndNotify({ number, station, token, region, buy_date }) {
@@ -308,6 +310,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
