@@ -192,11 +192,11 @@ app.post("/api/save-ticket", async (req, res) => {
     // drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
     // ======================== TEST MODE (RÚT NGẮN LỊCH) ========================
-    drawTime = new Date(Date.now() + 60 * 1000); // 1 phút
+    let drawTime = new Date(Date.now() + 60 * 1000); // 1 phút
     console.log("🧪 TEST MODE: Lịch rút gọn còn 1 phút");
 
     // ======================== DÒ NGAY ========================
-    if (drawTime <= now) {
+    // if (drawTime <= now) {
       console.log("🎯 Vé cũ hoặc đã tới giờ xổ → DÒ NGAY");
 
       const apiUrl = `https://xoso188.net/api/front/open/lottery/history/list/game?limitNum=30&gameCode=${station}`;
@@ -215,7 +215,7 @@ app.post("/api/save-ticket", async (req, res) => {
         mode: "immediate",
         result: resultText
       });
-    }
+    // }
 
     // ======================== ĐẶT LỊCH ========================
     const delay = drawTime - now;
@@ -256,6 +256,7 @@ async function checkAndNotify({ number, station, token, region, buy_date }) {
     const resultText = checkResult(number, parsed.numbers, region);
 
     sendNotification(token, "🎟️ Kết quả vé số", resultText);
+    await pool.query(`UPDATE tickets SET processed = TRUE WHERE ticket_number=$1`, [number]);
 
   } catch (err) {
     console.error("❌ Lỗi check vé:", err.message);
@@ -306,5 +307,6 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
