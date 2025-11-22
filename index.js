@@ -234,6 +234,7 @@ app.post("/api/save-ticket", async (req, res) => {
       return res.json({
         success: true,
         mode: "immediate",
+        result: resultText,
         scheduled_time: drawTime.toLocaleString("vi-VN"),
         message: "Vé chưa xổ — đã đặt lịch"
       });
@@ -310,6 +311,7 @@ app.get("/", (_, res) =>
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
