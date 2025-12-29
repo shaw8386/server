@@ -5,6 +5,9 @@ import cors from "cors";
 import admin from "firebase-admin";
 import fs from "fs";
 import pkg from "pg";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 process.env.TZ = "Asia/Ho_Chi_Minh";
 const { Pool } = pkg;
@@ -19,7 +22,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-pool.on("connect", client => {
+pool.on("connect", (client) => {
   client.query("SET TIME ZONE 'Asia/Ho_Chi_Minh';");
 });
 
@@ -30,6 +33,7 @@ async function initDatabase() {
 
     console.log("✅ PostgreSQL connected");
 
+    // tickets (giữ nguyên)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -42,6 +46,19 @@ async function initDatabase() {
         scheduled_time TIMESTAMP,
         processed BOOLEAN DEFAULT FALSE,
         buy_date VARCHAR(20)
+      );
+    `);
+
+    // users (mới)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        telegram_id BIGINT UNIQUE NOT NULL,
+        full_name VARCHAR(120),
+        password_hash TEXT,
+        points INT DEFAULT 0,
+        last_claim_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -87,6 +104,182 @@ async function sendNotification(token, title, body) {
   }
 }
 
+// ====================== AUTH HELPERS ======================
+function verifyTelegramAuth(payload) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) return { ok: false, message: "Missing TELEGRAM_BOT_TOKEN" };
+
+  const { hash, ...data } = payload || {};
+  if (!hash) return { ok: false, message: "Missing Telegram hash" };
+
+  const keys = Object.keys(data).sort();
+  const dataCheckString = keys
+    .filter((k) => data[k] !== undefined && data[k] !== null)
+    .map((k) => `${k}=${data[k]}`)
+    .join("\n");
+
+  const secretKey = crypto.createHash("sha256").update(botToken).digest();
+  const hmac = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+
+  if (hmac !== hash) return { ok: false, message: "Telegram signature invalid" };
+
+  return { ok: true };
+}
+
+function signJwt(userRow) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("Missing JWT_SECRET");
+  return jwt.sign(
+    { uid: userRow.id, telegram_id: userRow.telegram_id },
+    secret,
+    { expiresIn: "30d" }
+  );
+}
+
+function authMiddleware(req, res, next) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
+  if (!token) return res.status(401).json({ success: false, message: "Missing token" });
+
+  try {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ success: false, message: "Missing JWT_SECRET" });
+
+    req.auth = jwt.verify(token, secret);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+}
+
+async function getUserSafeById(userId) {
+  const { rows } = await pool.query(
+    `SELECT telegram_id, full_name, points,
+            (last_claim_date = CURRENT_DATE) as claimed_today
+     FROM users WHERE id=$1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+// ====================== AUTH ROUTES ======================
+
+// Telegram login/register
+app.post("/auth/telegram", async (req, res) => {
+  try {
+    const tg = req.body || {};
+    const vr = verifyTelegramAuth(tg);
+    if (!vr.ok) return res.status(401).json({ success: false, message: vr.message });
+
+    const telegram_id = Number(tg.id);
+    if (!telegram_id) return res.status(400).json({ success: false, message: "Missing telegram id" });
+
+    const full_name = `${tg.first_name || ""} ${tg.last_name || ""}`.trim();
+
+    const { rows: found } = await pool.query(
+      `SELECT * FROM users WHERE telegram_id=$1`,
+      [telegram_id]
+    );
+
+    let userRow;
+    if (found.length === 0) {
+      const { rows: created } = await pool.query(
+        `INSERT INTO users (telegram_id, full_name)
+         VALUES ($1, $2)
+         RETURNING *`,
+        [telegram_id, full_name]
+      );
+      userRow = created[0];
+    } else {
+      // update full_name (phòng trường hợp user đổi tên)
+      const { rows: updated } = await pool.query(
+        `UPDATE users SET full_name=$2 WHERE telegram_id=$1 RETURNING *`,
+        [telegram_id, full_name]
+      );
+      userRow = updated[0];
+    }
+
+    const token = signJwt(userRow);
+    const safe = await getUserSafeById(userRow.id);
+
+    res.json({ success: true, token, user: safe });
+  } catch (err) {
+    console.error("❌ /auth/telegram:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// get me
+app.get("/auth/me", authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserSafeById(req.auth.uid);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    res.json({ success: true, user });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// set/change password (user tự đặt pass)
+app.post("/auth/set-password", authMiddleware, async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password || String(password).length < 4) {
+      return res.status(400).json({ success: false, message: "Password tối thiểu 4 ký tự" });
+    }
+
+    const hash = await bcrypt.hash(String(password), 10);
+
+    await pool.query(
+      `UPDATE users SET password_hash=$2 WHERE id=$1`,
+      [req.auth.uid, hash]
+    );
+
+    const user = await getUserSafeById(req.auth.uid);
+    res.json({ success: true, user });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ====================== POINTS ROUTES (không dùng /api để tránh proxy) ======================
+
+// claim +1 điểm mỗi ngày
+app.post("/app/points/claim-daily", authMiddleware, async (req, res) => {
+  try {
+    const { rows: exists } = await pool.query(
+      `SELECT id FROM users WHERE id=$1`,
+      [req.auth.uid]
+    );
+    if (!exists[0]) return res.status(404).json({ success: false, message: "User not found" });
+
+    const { rows: check } = await pool.query(
+      `SELECT (last_claim_date = CURRENT_DATE) as claimed_today
+       FROM users WHERE id=$1`,
+      [req.auth.uid]
+    );
+
+    if (check[0]?.claimed_today) {
+      const user = await getUserSafeById(req.auth.uid);
+      return res.json({ success: false, message: "Hôm nay bạn đã nhận điểm rồi!", user });
+    }
+
+    await pool.query(
+      `UPDATE users
+       SET points = points + 1,
+           last_claim_date = CURRENT_DATE
+       WHERE id=$1`,
+      [req.auth.uid]
+    );
+
+    const user = await getUserSafeById(req.auth.uid);
+    return res.json({ success: true, message: "Bạn đã nhận +1 điểm!", user });
+
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 // ====================== GIỜ XỔ ======================
 const DRAW_TIMES = {
   bac: { hour: 18, minute: 35 },
@@ -99,7 +292,7 @@ function checkResult(ticketNumber, results, region) {
   const n = ticketNumber.trim();
   const match = (arr, digits) => {
     const user = n.slice(-digits);
-    return arr.some(v => String(v).trim().slice(-digits) === user);
+    return arr.some((v) => String(v).trim().slice(-digits) === user);
   };
 
   if (!results) return "⚠️ Không lấy được kết quả xổ số.";
@@ -143,7 +336,7 @@ function parseLotteryApiResponse(data, region, ticketDateStr) {
         const [y, m, d] = ticketDateStr.split("-");
         target = `${d}/${m}/${y}`;
       }
-      issue = data.t.issueList.find(i => i.turnNum === target);
+      issue = data.t.issueList.find((i) => i.turnNum === target);
     }
 
     if (!issue) issue = data.t.issueList[0];
@@ -158,9 +351,8 @@ function parseLotteryApiResponse(data, region, ticketDateStr) {
 
     detail.forEach((raw, idx) => {
       const prize = prizeNames[idx];
-      if (prize) out.numbers[prize] = raw.split(",").map(v => v.trim());
+      if (prize) out.numbers[prize] = raw.split(",").map((v) => v.trim());
     });
-
   } catch (err) {
     console.error("❌ parse FE error:", err);
   }
@@ -194,15 +386,16 @@ app.post("/api/save-ticket", async (req, res) => {
 
     console.log("⏳ Đặt lịch sau", delay / 1000, "giây");
 
-    setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), delay);
+    // nếu delay âm (mua vé quá giờ) -> chạy luôn
+    const safeDelay = delay > 0 ? delay : 1000;
+    setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), safeDelay);
 
     res.json({
       success: true,
       mode: "scheduled",
       scheduled_time: drawTime.toLocaleString("vi-VN"),
-      message: "Vé chưa xổ — đã đặt lịch"
+      message: "Vé chưa xổ — đã đặt lịch",
     });
-
   } catch (err) {
     console.error("❌ save-ticket error:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -216,7 +409,11 @@ async function checkAndNotify({ number, station, token, region, buy_date }) {
     const resp = await fetch(apiUrl);
     const txt = await resp.text();
     let dataParsed;
-    try { dataParsed = JSON.parse(txt); } catch { dataParsed = null; }
+    try {
+      dataParsed = JSON.parse(txt);
+    } catch {
+      dataParsed = null;
+    }
 
     const parsed = parseLotteryApiResponse(dataParsed, region, buy_date);
     const resultText = checkResult(number, parsed.numbers, region);
@@ -224,7 +421,6 @@ async function checkAndNotify({ number, station, token, region, buy_date }) {
     sendNotification(token, "🎟️ Kết quả vé số", resultText);
 
     await pool.query(`UPDATE tickets SET processed = TRUE WHERE ticket_number=$1`, [number]);
-
   } catch (err) {
     console.error("❌ Lỗi check vé:", err.message);
   }
@@ -252,7 +448,7 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
-// ====================== PROXY ======================
+// ====================== PROXY (giữ nguyên) ======================
 const TARGET_BASE = "https://xoso188.net";
 app.use("/api", async (req, res) => {
   const targetUrl = TARGET_BASE + req.originalUrl;
