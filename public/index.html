@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kết Quả Xổ Số — GI8 Mobile</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Ẩn các trang chưa active */
+    .page { display: none; }
+    .page.active { display: block; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ======= TOPBAR ======= -->
+  <div class="topbar">
+    <div class="menu-btn" id="menuBtn">☰</div>
+    <div class="title" id="pageTitle">Trang Chủ</div>
+    <div class="more-btn" id="authBtn">🔐</div>
+    <div class="more-btn" id="calendarBtn" style="display:none;">📅</div>
+  </div>
+
+  <!-- ======= SIDEBAR MENU ======= -->
+  <div id="sidebar">
+    <div class="sidebar-header">📋 Menu</div>
+    <div class="sidebar-item" data-page="home">🏠 Trang Chủ</div>
+    <div class="sidebar-item" data-page="lottery">🎯 Kết Quả XS</div>
+    <div class="sidebar-item" data-page="tickets">🎟️ Dò Vé Số Tự Động</div>
+    <div class="sidebar-item" data-page="lives">🎥 Trực Tiếp KQXS</div>
+    <div class="sidebar-item" data-page="profile">👤 Thông tin cá nhân</div>
+  </div>
+
+  <!-- ======= TRANG CHỦ ======= -->
+  <div id="page-home" class="page active">
+    <div class="home-guide">
+
+      <h2 style="margin-bottom:10px;">📖 Hướng Dẫn Sử Dụng</h2>
+
+      <div class="guide-item" onclick="switchPage('lottery')">
+        🏆 <b>Xem Kết Quả Xổ Số</b>
+        <div class="desc">Xem kết quả từng ngày, theo Miền & Đài.</div>
+      </div>
+
+      <div class="guide-item" onclick="switchPage('tickets')">
+        🔍 <b>Tra Cứu Vé Tự Động</b>
+        <div class="desc">Nhập vé → lưu lại → tự động dò khi có kết quả.</div>
+      </div>
+
+      <div class="guide-item" onclick="switchPage('lives')">
+        🎥 <b>Trực Tiếp Quay Số</b>
+        <div class="desc">Xem quay số theo thời gian thực (Đang phát triển).</div>
+      </div>
+
+      <div class="guide-item">
+        🔔 <b>Thông Báo Kết Quả</b>
+        <div class="desc">Ứng dụng sẽ gửi thông báo khi có kết quả mới.</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ======= THÔNG TIN CÁ NHÂN ======= -->
+  <div id="page-profile" class="page">
+    <div class="card" style="padding:12px;">
+      <div style="font-weight:800;font-size:16px;margin-bottom:8px;">👤 Thông tin cá nhân</div>
+
+      <div id="authStateLoggedOut">
+        <div style="margin-bottom:10px;color:#555;">
+          Bạn chưa đăng nhập. Hãy đăng nhập/đăng ký bằng Telegram.
+        </div>
+
+        <button id="btnTgRegister" class="ticket-submit-btn" style="width:100%;margin-bottom:8px;">
+          🧩 Register by Telegram
+        </button>
+
+        <button id="btnTgLogin" class="ticket-submit-btn" style="width:100%;">
+          🔐 Login bằng Telegram
+        </button>
+
+        <div id="tgWidgetPanel" style="display:none;margin-top:12px;padding:10px;border:1px dashed #cfd6e4;border-radius:12px;background:#fafcff;">
+          <div style="font-weight:700;margin-bottom:8px;">✅ Đăng nhập bằng Telegram</div>
+          <div id="tgWidgetWrap"></div>
+        </div>
+
+        <div id="pwPanel" style="display:none;margin-top:12px;">
+          <div style="font-weight:700;margin-bottom:6px;">🔑 Nhập mật khẩu</div>
+          <input id="pwInput" type="password" placeholder="Mật khẩu" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;">
+          <button id="btnPwSubmit" class="ticket-submit-btn" style="width:100%;margin-top:8px;">✅ Xác nhận</button>
+        </div>
+      </div>
+
+      <div id="authStateLoggedIn" style="display:none;">
+        <div style="line-height:1.7;">
+          <div><b>Telegram ID:</b> <span id="uTgId">--</span></div>
+          <div><b>Full name:</b> <span id="uFullName">--</span></div>
+          <div><b>Điểm:</b> <span id="uPoints">0</span></div>
+        </div>
+
+        <button id="btnLogout" class="ticket-submit-btn" style="width:100%;margin-top:12px;">🚪 Logout</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================
+       🧩 GIAO DIỆN KẾT QUẢ XỔ SỐ - VER 1
+    ============================ -->
+  <div id="page-lottery" class="page">
+    <!-- Calendar popup -->
+    <div class="calendar-popup" id="calendarPopup">
+      <div class="calendar-header">
+        <button id="prevMonth">◀</button>
+        <span id="monthLabel">Tháng 11 / 2025</span>
+        <button id="nextMonth">▶</button>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </div>
+
+    <!-- Điều khiển ngày -->
+    <div class="date-controls">
+      <button class="nav-btn" id="prevBtn">◀ Trước</button>
+      <div class="date-display" id="dateLabel">--/--/----</div>
+      <button class="nav-btn" id="nextBtn">Sau ▶</button>
+    </div>
+
+    <!-- Chọn Miền / Đài -->
+    <div class="region-controls" style="display:flex;gap:6px;padding:8px 10px;background:#fff;border-bottom:1px solid #e0e6ef;">
+      <select id="regionSelect" style="flex:1;padding:6px;border-radius:6px;border:1px solid #ccc;font-weight:600;">
+        <option value="bac">Miền Bắc</option>
+        <option value="trung">Miền Trung</option>
+        <option value="nam">Miền Nam</option>
+      </select>
+
+      <select id="stationSelect" style="flex:2;padding:6px;border-radius:6px;border:1px solid #ccc;font-weight:600;">
+        <!-- JS đổ danh sách đài -->
+      </select>
+    </div>
+
+    <!-- Bảng kết quả -->
+    <div class="card">
+      <div class="kq-head" id="regionLabel">XSMB - Hà Nội</div>
+
+      <div id="mainResults">
+        <div class="row"><div class="cell-left">ĐB</div><div class="cell-right"><div class="db-number" id="dbNumber">--</div></div></div>
+        <div class="row"><div class="cell-left">G1</div><div class="cell-right"><div class="g1-number" id="g1Number">--</div></div></div>
+        <div class="row"><div class="cell-left">G2</div><div class="cell-right multi-numbs" id="g2"></div></div>
+        <div class="row"><div class="cell-left">G3</div><div class="cell-right multi-numbs" id="g3"></div></div>
+        <div class="row"><div class="cell-left">G4</div><div class="cell-right multi-numbs" id="g4"></div></div>
+        <div class="row"><div class="cell-left">G5</div><div class="cell-right multi-numbs" id="g5"></div></div>
+        <div class="row"><div class="cell-left">G6</div><div class="cell-right multi-numbs" id="g6"></div></div>
+        <div class="row"><div class="cell-left">G7</div><div class="cell-right g7" id="g7"></div></div>
+        <div class="row" id="g8-row" style="display:none;"><div class="cell-left">G8</div><div class="cell-right multi-numbs" id="g8"></div></div>
+
+        <div class="ctrl-bar">
+          <div class="mode-btns">
+            <button id="mode-all" class="active">All</button>
+            <button id="mode-2">2 Số</button>
+            <button id="mode-3">3 Số</button>
+          </div>
+          <button id="speakBtn">🔊 Đọc kết quả</button>
+        </div>
+
+        <div class="loto-wrap">
+          <div class="loto-title">Lô tô Đầu – Đuôi</div>
+          <div class="loto-grid">
+            <div class="loto-col">
+              <div class="loto-header"><div>Đầu</div><div>Đuôi</div></div>
+              <div id="loto-left"></div>
+            </div>
+            <div class="loto-col">
+              <div class="loto-header"><div>Đầu</div><div>Đuôi</div></div>
+              <div id="loto-right"></div>
+            </div>
+          </div>
+          <div class="hint">Vuốt trái hoặc phải để đổi ngày</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+  🎟️ QUẢN LÝ VÉ ĐÃ MUA — VER 2
+  ============================== -->
+  <div id="page-tickets" class="page">
+    <div class="ticket-box">
+
+    <div class="ticket-inputs">
+
+      <div class="row-two">
+        <div class="ticket-number-group">
+          <input id="ticketInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Nhập Vé Số">
+        </div>
+
+        <input id="ticketDate" type="date" class="date-input" lang="vi">
+      </div>
+
+      <div class="row-two">
+        <select id="ticketStation" ></select>
+        <select id="ticketRegion">
+          <option value="bac">M.Bắc</option>
+          <option value="trung">M.Trung</option>
+          <option value="nam">M.Nam</option>
+        </select>
+      </div>
+
+      <button id="saveTicketBtn" class="ticket-submit-btn">
+        🔍 Lên lịch / Tra cứu KQXS
+      </button>
+
+    </div>
+      <div id="savedTickets" class="ticket-list"></div>
+    </div>
+  </div>
+
+    <!-- ==============================
+  🎥 Trực tiếp KQXS (Đang phát triển)
+  ============================== -->
+  <div id="page-lives" class="page">
+    <div id="liveLoader" style="text-align:center; padding:20px;">
+      <div style="font-size:40px;">🔄</div>
+      <div style="font-size:18px;">Tính năng đang phát triển...</div>
+    </div>
+
+    <div id="loadingCubes" class="cubes-loader" style="display:none;">
+      <div class="container">
+        <div class="cube"></div>
+        <div class="cube"></div>
+        <div class="cube"></div>
+        <div class="cube"></div>
+        <div class="cube"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast mini hiển thị trong giao diện -->
+  <div id="toast"></div>
+</div>
+
+<!-- ============================
+     🧠 JavaScript chính
+============================= -->
+<script src="js/ver4_lives.js"></script>
+<script src="js/ver1_lottery.js"></script>
+<script src="js/ver2_tickets.js"></script>
+<script src="js/ver3_menu.js"></script>
+<script src="js/utils_toast.js"></script>
+<script src="js/ver5_auth.js"></script>
+
+
+<script>
+  // function callUnity(type, payload={}) {
+  //   const msg = JSON.stringify({ type, id: Date.now().toString(), payload });
+  //   if (window.Unity && window.Unity.call) {
+  //     window.Unity.call(msg); // Android (UniWebView)
+  //   } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.unityControl) {
+  //     window.webkit.messageHandlers.unityControl.postMessage(msg); // iOS
+  //   }
+  // }
+
+  // document.getElementById("testNotifyBtn").addEventListener("click", () => {
+  //   console.log("🔔 Gọi Unity gửi thông báo test...");
+  //   callUnity('OPEN_POPUP', { 
+  //     title: 'Thông báo Test 🎯', 
+  //     message: 'Nút Test Notification đã được bấm!' 
+  //   });
+  // });
+  // Khi Unity gửi FCM token xuống HTML
+  window.onReceiveToken = function(token) {
+    console.log("📱 HTML nhận token:", token);
+
+    // ✅ Lưu token vào biến toàn cục
+    window.fcmToken = token;
+
+    // ✅ Lưu token vào localStorage (để giữ lại sau khi reload)
+    localStorage.setItem("fcm_token", token);
+  };
+
+  // ✅ Nếu đã có token trong localStorage (app reload), phục hồi lại
+  window.addEventListener("DOMContentLoaded", () => {
+    const savedToken = localStorage.getItem("fcm_token");
+    if (savedToken) {
+      window.fcmToken = savedToken;
+      console.log("📦 Khôi phục token từ localStorage:", savedToken);
+      const el = document.getElementById("fcmToken");
+      if (el) el.innerText = "FCM Token: " + savedToken;
+    }
+  });
+</script>
+ 
+</body>
+</html>
