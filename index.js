@@ -242,6 +242,47 @@ app.post("/auth/set-password", authMiddleware, async (req, res) => {
   }
 });
 
+app.post("/auth/password-flow", async (req, res) => {
+  try {
+    const { telegram_id, password } = req.body || {};
+    const tgId = Number(telegram_id);
+
+    if (!tgId) return res.status(400).json({ success:false, message:"Missing telegram_id" });
+    if (!password || String(password).length < 4) {
+      return res.status(400).json({ success:false, message:"Password tối thiểu 4 ký tự" });
+    }
+
+    const { rows } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [tgId]);
+    if (!rows[0]) return res.status(404).json({ success:false, message:"User chưa tồn tại (hãy login telegram trước)" });
+
+    const userRow = rows[0];
+
+    // Nếu chưa có pass => set pass
+    if (!userRow.password_hash) {
+      const hash = await bcrypt.hash(String(password), 10);
+      const { rows: updated } = await pool.query(
+        `UPDATE users SET password_hash=$2 WHERE telegram_id=$1 RETURNING *`,
+        [tgId, hash]
+      );
+
+      const token = signJwt(updated[0]);
+      const safe = await getUserSafeById(updated[0].id);
+      return res.json({ success:true, token, user: safe });
+    }
+
+    // Nếu đã có pass => check pass
+    const ok = await bcrypt.compare(String(password), userRow.password_hash);
+    if (!ok) return res.status(401).json({ success:false, message:"Sai mật khẩu" });
+
+    const token = signJwt(userRow);
+    const safe = await getUserSafeById(userRow.id);
+    return res.json({ success:true, token, user: safe });
+
+  } catch (e) {
+    res.status(500).json({ success:false, message: e.message });
+  }
+});
+
 // ====================== POINTS ROUTES (không dùng /api để tránh proxy) ======================
 
 // claim +1 điểm mỗi ngày
@@ -466,3 +507,4 @@ app.get("/", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
