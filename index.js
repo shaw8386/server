@@ -512,9 +512,10 @@ app.use("/api", async (req, res) => {
 });
 
 // ====================== ROOT ======================
-app.get("/", (_, res) => res.send("✅ Railway Lottery Server Running"));
+app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
