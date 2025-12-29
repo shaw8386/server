@@ -16,6 +16,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Serve frontend từ /public
+app.use(express.static(path.join(__dirname, "public")));
+
 // ====================== 🧠 DATABASE ======================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -507,4 +516,5 @@ app.get("/", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
