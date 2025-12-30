@@ -14,11 +14,11 @@
 </head>
 <body>
   <div class="card">
-    <div class="title">🧩 Xổ Số Gi8 — Đăng ký bằng Telegram</div>
+    <div class="title">🧩 Xổ Số Gi8 — Đăng Ký Tài Khoản</div>
     <div id="msg" class="msg"></div>
 
     <div class="panel">
-      <div style="font-weight:900;margin-bottom:8px;">✅ Xác thực Telegram</div>
+      <div style="font-weight:900;margin-bottom:8px;">🔽 Xác thực Telegram</div>
       <div id="tgWrap"></div>
     </div>
   </div>
@@ -59,7 +59,7 @@
           return;
         }
 
-        // ✅ tạo mới -> gửi reg_token về app để app local set password
+        // ✅ tạo mới hoặc NEED_SET_PASSWORD -> gửi reg_token về app để app local set password
         location.href =
           "gi8://tgreg?status=CREATED"
           + "&reg_token=" + encodeURIComponent(data.reg_token || "")
@@ -85,3 +85,4 @@
 </script>
 </body>
 </html>
+
