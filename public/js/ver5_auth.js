@@ -53,6 +53,54 @@ function showSetPwPanel(show) {
   if (show) p.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function renderTopbarAuth() {
+  const user = getUser();
+  const icon = document.getElementById("authIcon");
+  const avatar = document.getElementById("authAvatar");
+  const badge = document.getElementById("authBadge");
+
+  if (!icon || !avatar || !badge) return;
+
+  if (!user) {
+    // Logged out
+    icon.textContent = "🔐";
+    avatar.style.display = "none";
+    badge.style.display = "none";
+    badge.textContent = "0";
+    return;
+  }
+
+  // Logged in
+  icon.textContent = "👤";
+
+  // Badge points
+  const pts = Number(user.points ?? 0);
+  badge.textContent = pts > 99 ? "99+" : String(pts);
+  badge.style.display = "flex";
+
+  // Avatar (nếu có)
+  // Nếu bạn muốn lưu photo_url vào DB/LS thì thêm field photo_url khi register.
+  const photoUrl = user.photo_url || user.photo || user.avatar_url;
+
+  if (photoUrl) {
+    avatar.style.backgroundImage = `url("${photoUrl}")`;
+    avatar.textContent = "";
+    avatar.style.display = "block";
+  } else {
+    // fallback chữ cái
+    const name = (user.full_name || "").trim();
+    const letter = name ? name[0].toUpperCase() : "U";
+    avatar.style.backgroundImage = "";
+    avatar.textContent = letter;
+    avatar.style.display = "flex";
+    avatar.style.alignItems = "center";
+    avatar.style.justifyContent = "center";
+    avatar.style.fontWeight = "900";
+    avatar.style.color = "#111";
+    avatar.style.fontSize = "13px";
+  }
+}
+
 // ====================== RENDER ======================
 function renderAuthUI() {
   const user = getUser();
@@ -82,6 +130,7 @@ function renderAuthUI() {
     btnClaim.disabled = claimed;
     btnClaim.style.opacity = claimed ? "0.6" : "1";
   }
+  renderTopbarAuth();
 }
 
 // ====================== API: REFRESH ME ======================
@@ -310,4 +359,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("loginPassword")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doLogin();
   });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  const authBtn = document.getElementById("authBtn");
+  if (authBtn) {
+    authBtn.addEventListener("click", () => {
+      if (typeof switchPage === "function") {
+        switchPage("profile");
+      } else {
+        console.warn("⚠️ switchPage chưa được load");
+      }
+    });
+  }
 });
