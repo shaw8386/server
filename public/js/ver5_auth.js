@@ -110,6 +110,7 @@ function renderAuthUI() {
   if (!user) {
     out.style.display = "block";
     inn.style.display = "none";
+    renderTopbarAuth();
     return;
   }
 
@@ -371,4 +372,5 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
 
