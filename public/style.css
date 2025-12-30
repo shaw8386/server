@@ -597,14 +597,15 @@ input[type="date"]:not(:focus):not([value]):before {
 }
 
 .auth-avatar{
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
+  margin-right: -6px;
   border-radius: 50%;
   background: #e9edf7;
   background-size: cover;
   background-position: center;
   display: none;
-  flex: 0 0 26px;
+  flex: 0 0 30px;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 
@@ -615,8 +616,7 @@ input[type="date"]:not(:focus):not([value]):before {
 
 .auth-badge{
   position: absolute;
-  /* top: -6px; */
-  right: -6px;
+  margin-right: 50px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -630,4 +630,3 @@ input[type="date"]:not(:focus):not([value]):before {
   justify-content: center;
   border: 2px solid #fff;
 }
-
