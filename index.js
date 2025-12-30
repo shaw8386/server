@@ -241,6 +241,26 @@ app.post("/auth/telegram-register", async (req, res) => {
 
     const { rows: found } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
     if (found[0]) {
+      // ✅ tồn tại nhưng CHƯA có mật khẩu -> cho set password luôn
+      if (!found[0].password_hash) {
+        const secret = requireEnv("JWT_SECRET");
+        const reg_token = jwt.sign(
+          { telegram_id, purpose: "register" },
+          secret,
+          { expiresIn: "10m" }
+        );
+    
+        return res.json({
+          success: true,
+          code: "NEED_SET_PASSWORD",
+          telegram_id,
+          full_name,
+          reg_token,
+          message: "Tài khoản đã tồn tại nhưng chưa có mật khẩu. Vui lòng đặt mật khẩu.",
+        });
+      }
+    
+      // ✅ đã có mật khẩu -> yêu cầu login
       return res.json({
         success: false,
         code: "EXISTS",
@@ -539,6 +559,7 @@ app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
