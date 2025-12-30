@@ -25,10 +25,10 @@
   <div id="sidebar">
     <div class="sidebar-header">📋 Menu</div>
     <div class="sidebar-item" data-page="home">🏠 Trang Chủ</div>
+    <div class="sidebar-item" data-page="profile">👤 Thông tin cá nhân</div>
     <div class="sidebar-item" data-page="lottery">🎯 Kết Quả XS</div>
     <div class="sidebar-item" data-page="tickets">🎟️ Dò Vé Số Tự Động</div>
     <div class="sidebar-item" data-page="lives">🎥 Trực Tiếp KQXS</div>
-    <div class="sidebar-item" data-page="profile">👤 Thông tin cá nhân</div>
   </div>
 
   <!-- ======= TRANG CHỦ ======= -->
@@ -63,45 +63,60 @@
 
   <!-- ======= THÔNG TIN CÁ NHÂN ======= -->
   <div id="page-profile" class="page">
-    <div class="card" style="padding:12px;">
-      <div style="font-weight:800;font-size:16px;margin-bottom:8px;">👤 Thông tin cá nhân</div>
+    <div class="card profile-card">
+      <div class="profile-title">👤 Thông tin cá nhân</div>
 
-      <div id="authStateLoggedOut">
-        <div style="margin-bottom:10px;color:#555;">
+      <!-- ===== LOGGED OUT ===== -->
+      <div id="authStateLoggedOut" class="auth-logged-out">
+        <div class="profile-desc">
           Bạn chưa đăng nhập. Hãy đăng nhập/đăng ký bằng Telegram.
         </div>
 
-        <button id="btnTgRegister" class="ticket-submit-btn" style="width:100%;margin-bottom:8px;">
-          🧩 Register by Telegram
-        </button>
+        <!-- 2 nút cùng hàng -->
+        <div class="auth-btn-row">
+          <button id="btnTgRegister" class="ticket-submit-btn">
+            🧩 Đăng Ký
+          </button>
 
-        <button id="btnTgLogin" class="ticket-submit-btn" style="width:100%;">
-          🔐 Login bằng Telegram
-        </button>
+          <button id="btnTgLogin" class="ticket-submit-btn btn-login">
+            <svg class="icon-lock" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2Zm-7-2a2 2 0 1 1 4 0v2h-4V6Zm7 14H7V10h10v10Z"/>
+            </svg>
+            <span>Đăng Nhập</span>
+          </button>
+        </div>
 
-        <div id="tgWidgetPanel" style="display:none;margin-top:12px;padding:10px;border:1px dashed #cfd6e4;border-radius:12px;background:#fafcff;">
-          <div style="font-weight:700;margin-bottom:8px;">✅ Đăng nhập bằng Telegram</div>
+        <!-- Telegram Widget -->
+        <div id="tgWidgetPanel" class="tg-widget-panel">
+          <div class="tg-widget-title">✅ Đăng nhập bằng Telegram</div>
           <div id="tgWidgetWrap"></div>
         </div>
 
-        <div id="pwPanel" style="display:none;margin-top:12px;">
-          <div style="font-weight:700;margin-bottom:6px;">🔑 Nhập mật khẩu</div>
-          <input id="pwInput" type="password" placeholder="Mật khẩu" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;">
-          <button id="btnPwSubmit" class="ticket-submit-btn" style="width:100%;margin-top:8px;">✅ Xác nhận</button>
+        <!-- Password -->
+        <div id="pwPanel" class="pw-panel">
+          <div class="pw-title">🔑 Nhập mật khẩu</div>
+          <input id="pwInput" type="password" placeholder="Mật khẩu">
+          <button id="btnPwSubmit" class="ticket-submit-btn btn-confirm">
+            ✅ Xác nhận
+          </button>
         </div>
       </div>
 
-      <div id="authStateLoggedIn" style="display:none;">
-        <div style="line-height:1.7;">
+      <!-- ===== LOGGED IN ===== -->
+      <div id="authStateLoggedIn" class="auth-logged-in">
+        <div class="profile-info">
           <div><b>Telegram ID:</b> <span id="uTgId">--</span></div>
           <div><b>Full name:</b> <span id="uFullName">--</span></div>
           <div><b>Điểm:</b> <span id="uPoints">0</span></div>
         </div>
 
-        <button id="btnLogout" class="ticket-submit-btn" style="width:100%;margin-top:12px;">🚪 Logout</button>
+        <button id="btnLogout" class="ticket-submit-btn btn-logout">
+          🚪 Logout
+        </button>
       </div>
     </div>
   </div>
+
 
 
   <!-- ============================

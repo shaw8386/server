@@ -479,3 +479,97 @@ input[type="date"]:not(:focus):not([value]):before {
   pointer-events: none;
   left: 12px;
 }
+
+/* ===== PROFILE PAGE ===== */
+.profile-card {
+  padding: 12px;
+}
+
+.profile-title {
+  font-weight: 800;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.profile-desc {
+  margin-bottom: 10px;
+  color: #555;
+}
+
+/* ===== AUTH STATES ===== */
+.auth-logged-in,
+.auth-logged-out {
+  display: none;
+}
+
+/* ===== BUTTON ROW ===== */
+.auth-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-btn-row .ticket-submit-btn {
+  flex: 1;
+  margin: 0;
+}
+
+/* ===== LOGIN BUTTON ICON ===== */
+.btn-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.icon-lock {
+  width: 18px;
+  height: 18px;
+  fill: currentColor; /* đen/trắng theo màu chữ */
+}
+
+/* ===== TELEGRAM WIDGET ===== */
+.tg-widget-panel {
+  display: none;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px dashed #cfd6e4;
+  border-radius: 12px;
+  background: #fafcff;
+}
+
+.tg-widget-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* ===== PASSWORD PANEL ===== */
+.pw-panel {
+  display: none;
+  margin-top: 12px;
+}
+
+.pw-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.pw-panel input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+}
+
+.btn-confirm {
+  margin-top: 8px;
+}
+
+/* ===== LOGGED IN INFO ===== */
+.profile-info {
+  line-height: 1.7;
+}
+
+/* ===== LOGOUT ===== */
+.btn-logout {
+  margin-top: 12px;
+}
