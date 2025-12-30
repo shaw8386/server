@@ -3,100 +3,71 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GI8 — Đăng nhập</title>
+  <title>GI8 — Đăng ký Telegram</title>
   <style>
     body{font-family:system-ui;background:#f5f7fb;margin:0;padding:16px}
     .card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);max-width:420px;margin:18px auto}
     .title{font-weight:900;font-size:18px;margin-bottom:10px}
     .msg{display:none;background:#fff3cd;border:1px solid #ffe69c;color:#6b4e00;padding:10px;border-radius:10px;font-weight:700;margin-bottom:10px}
-    input{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;margin:6px 0}
-    button{width:100%;padding:10px;border:0;border-radius:10px;font-weight:900;margin-top:8px}
-    .btn{background:#0d6efd;color:#fff}
-    .btn2{background:#111;color:#fff}
-    .sep{display:flex;align-items:center;gap:10px;margin:12px 0;color:#888;font-weight:800}
-    .sep:before,.sep:after{content:"";flex:1;height:1px;background:#e6eaf2}
-    .panel{margin-top:12px;padding:10px;border:1px dashed #cfd6e4;border-radius:12px;background:#fafcff;display:none}
+    .panel{margin-top:12px;padding:10px;border:1px dashed #cfd6e4;border-radius:12px;background:#fafcff}
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="title">🔐 Xổ Số Gi8 — Đăng nhập</div>
-
+    <div class="title">🧩 Xổ Số Gi8 — Đăng ký bằng Telegram</div>
     <div id="msg" class="msg"></div>
 
-    <div style="font-weight:900;margin-bottom:6px;">Đăng nhập bằng Username + Password</div>
-    <input id="u" type="tel" inputmode="numeric" placeholder="Username (Telegram ID)" />
-    <input id="p" type="password" placeholder="Password" />
-    <button id="btnLogin" class="btn">Login</button>
-
-    <div class="sep"><span>hoặc</span></div>
-
-    <button id="btnShowTg" class="btn2">🧩 Register by Telegram</button>
-
-    <div id="tgPanel" class="panel">
-      <div style="font-weight:900;margin-bottom:8px;">✅ Đăng ký bằng Telegram</div>
+    <div class="panel">
+      <div style="font-weight:900;margin-bottom:8px;">✅ Xác thực Telegram</div>
       <div id="tgWrap"></div>
-
-      <div id="pwPanel" style="display:none;margin-top:12px;">
-        <div style="font-weight:900;margin-bottom:6px;">🔑 Đặt mật khẩu</div>
-        <input id="pw" type="password" placeholder="Mật khẩu (>= 4 ký tự)">
-        <button id="btnSetPw" class="btn">Lưu mật khẩu</button>
-      </div>
     </div>
   </div>
 
 <script>
-  const TG_BOT_USERNAME = "gi8_check_bot"; // bot username (không có @)
+  const TG_BOT_USERNAME = "gi8_check_bot";
   const API_BASE = ""; // cùng domain railway
-  let reg_token = "";
 
   const $ = (id)=>document.getElementById(id);
   function showMsg(t){ const el=$("msg"); el.style.display="block"; el.textContent=t; }
   function hideMsg(){ const el=$("msg"); el.style.display="none"; el.textContent=""; }
 
-  async function doLogin(){
-    hideMsg();
-    const telegram_id = ($("u").value||"").trim();
-    const password = ($("p").value||"").trim();
-    if(!telegram_id || !password) return showMsg("Thiếu Username hoặc Password");
-
-    const r = await fetch(API_BASE + "/auth/login",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ telegram_id, password })
-    });
-    const data = await r.json();
-
-    if(!data.success){
-      if(data.code==="NOT_FOUND") { showMsg("Chưa có tài khoản. Bấm Register by Telegram để đăng ký."); $("tgPanel").style.display="block"; return; }
-      if(data.code==="WRONG_PASSWORD") return showMsg("Sai mật khẩu");
-      return showMsg(data.message || "Login thất bại");
-    }
-
-    // ✅ Login OK -> redirect về callback -> deeplink về app
-    location.href = "/auth/callback?token=" + encodeURIComponent(data.token);
-  }
-
   function mountWidget(){
     const wrap = $("tgWrap");
     wrap.innerHTML = "";
+
     window.onTelegramAuth = async (tgUser)=>{
       hideMsg();
-      const r = await fetch(API_BASE + "/auth/telegram-register",{
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(tgUser)
-      });
-      const data = await r.json();
+      try{
+        const r = await fetch(API_BASE + "/auth/telegram-register",{
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify(tgUser)
+        });
+        const data = await r.json();
 
-      if(!data.success){
-        if(data.code==="EXISTS") return showMsg("Tài khoản đã tồn tại. Hãy login bằng Username + Password.");
-        return showMsg(data.message || "Đăng ký thất bại");
+        if(!data.success){
+          // user đã tồn tại -> quay về app để user login bằng pass
+          if(data.code==="EXISTS"){
+            // gửi về app trạng thái EXISTS
+            location.href =
+              "gi8://tgreg?status=EXISTS"
+              + "&telegram_id=" + encodeURIComponent(String(tgUser.id || ""))
+              + "&full_name=" + encodeURIComponent(((tgUser.first_name||"")+" "+(tgUser.last_name||"")).trim());
+            return;
+          }
+          showMsg(data.message || "Đăng ký thất bại");
+          return;
+        }
+
+        // ✅ tạo mới -> gửi reg_token về app để app local set password
+        location.href =
+          "gi8://tgreg?status=CREATED"
+          + "&reg_token=" + encodeURIComponent(data.reg_token || "")
+          + "&telegram_id=" + encodeURIComponent(String(data.telegram_id || ""))
+          + "&full_name=" + encodeURIComponent(String(data.full_name || ""));
+      }catch(e){
+        showMsg("❌ Lỗi kết nối server");
       }
-
-      reg_token = data.reg_token || "";
-      showMsg("✅ Đăng ký Telegram OK. Vui lòng đặt mật khẩu.");
-      $("pwPanel").style.display = "block";
     };
 
     const s = document.createElement("script");
@@ -110,27 +81,7 @@
     wrap.appendChild(s);
   }
 
-  async function setPassword(){
-    hideMsg();
-    const password = ($("pw").value||"").trim();
-    if(password.length < 4) return showMsg("Password tối thiểu 4 ký tự");
-    if(!reg_token) return showMsg("Thiếu reg_token. Vui lòng đăng ký Telegram lại.");
-
-    const r = await fetch(API_BASE + "/auth/register-set-password",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ reg_token, password })
-    });
-    const data = await r.json();
-    if(!data.success) return showMsg(data.message || "Lưu mật khẩu thất bại");
-
-    // ✅ Set pass OK -> redirect về callback -> deeplink
-    location.href = "/auth/callback?token=" + encodeURIComponent(data.token);
-  }
-
-  $("btnLogin").onclick = doLogin;
-  $("btnShowTg").onclick = ()=>{ $("tgPanel").style.display="block"; mountWidget(); };
-  $("btnSetPw").onclick = setPassword;
+  mountWidget();
 </script>
 </body>
 </html>
