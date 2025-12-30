@@ -615,7 +615,7 @@ input[type="date"]:not(:focus):not([value]):before {
 
 .auth-badge{
   position: absolute;
-  top: -6px;
+  /* top: -6px; */
   right: -6px;
   min-width: 18px;
   height: 18px;
@@ -630,3 +630,4 @@ input[type="date"]:not(:focus):not([value]):before {
   justify-content: center;
   border: 2px solid #fff;
 }
+
