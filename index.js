@@ -9,6 +9,9 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
+import path from "path";
+import { fileURLToPath } from "url";
+
 process.env.TZ = "Asia/Ho_Chi_Minh";
 const { Pool } = pkg;
 const app = express();
@@ -16,13 +19,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-import path from "path";
-import { fileURLToPath } from "url";
-
+// ====================== SERVE FRONTEND (/public) ======================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Serve frontend từ /public
 app.use(express.static(path.join(__dirname, "public")));
 
 // ====================== 🧠 DATABASE ======================
@@ -39,10 +38,8 @@ async function initDatabase() {
   try {
     await pool.connect();
     await pool.query("SET TIME ZONE 'Asia/Ho_Chi_Minh';");
-
     console.log("✅ PostgreSQL connected");
 
-    // tickets (giữ nguyên)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tickets (
         id SERIAL PRIMARY KEY,
@@ -58,7 +55,6 @@ async function initDatabase() {
       );
     `);
 
-    // users (mới)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -70,7 +66,6 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
   } catch (err) {
     console.error("❌ Database init error:", err.message);
   }
@@ -114,6 +109,12 @@ async function sendNotification(token, title, body) {
 }
 
 // ====================== AUTH HELPERS ======================
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing ${name}`);
+  return v;
+}
+
 function verifyTelegramAuth(payload) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) return { ok: false, message: "Missing TELEGRAM_BOT_TOKEN" };
@@ -131,18 +132,12 @@ function verifyTelegramAuth(payload) {
   const hmac = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
   if (hmac !== hash) return { ok: false, message: "Telegram signature invalid" };
-
   return { ok: true };
 }
 
 function signJwt(userRow) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("Missing JWT_SECRET");
-  return jwt.sign(
-    { uid: userRow.id, telegram_id: userRow.telegram_id },
-    secret,
-    { expiresIn: "30d" }
-  );
+  const secret = requireEnv("JWT_SECRET");
+  return jwt.sign({ uid: userRow.id, telegram_id: userRow.telegram_id }, secret, { expiresIn: "30d" });
 }
 
 function authMiddleware(req, res, next) {
@@ -151,9 +146,7 @@ function authMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ success: false, message: "Missing token" });
 
   try {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return res.status(500).json({ success: false, message: "Missing JWT_SECRET" });
-
+    const secret = requireEnv("JWT_SECRET");
     req.auth = jwt.verify(token, secret);
     next();
   } catch {
@@ -173,8 +166,46 @@ async function getUserSafeById(userId) {
 
 // ====================== AUTH ROUTES ======================
 
-// Telegram login/register
-app.post("/auth/telegram", async (req, res) => {
+// ✅ LOGIN: username (telegram_id) + password
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { telegram_id, password } = req.body || {};
+    const tgId = Number(telegram_id);
+
+    if (!tgId || !password) {
+      return res.status(400).json({ success: false, message: "Thiếu Username hoặc Password" });
+    }
+
+    const { rows } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [tgId]);
+    if (!rows[0]) {
+      return res.json({ success: false, code: "NOT_FOUND", message: "Chưa có tài khoản" });
+    }
+
+    const userRow = rows[0];
+
+    if (!userRow.password_hash) {
+      return res.json({
+        success: false,
+        code: "NO_PASSWORD",
+        message: "Tài khoản chưa có mật khẩu, vui lòng đăng ký bằng Telegram",
+      });
+    }
+
+    const ok = await bcrypt.compare(String(password), userRow.password_hash);
+    if (!ok) {
+      return res.json({ success: false, code: "WRONG_PASSWORD", message: "Sai mật khẩu" });
+    }
+
+    const token = signJwt(userRow);
+    const safe = await getUserSafeById(userRow.id);
+    return res.json({ success: true, token, user: safe });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ✅ REGISTER STEP 1: Telegram widget verify -> create user -> return reg_token
+app.post("/auth/telegram-register", async (req, res) => {
   try {
     const tg = req.body || {};
     const vr = verifyTelegramAuth(tg);
@@ -185,40 +216,76 @@ app.post("/auth/telegram", async (req, res) => {
 
     const full_name = `${tg.first_name || ""} ${tg.last_name || ""}`.trim();
 
-    const { rows: found } = await pool.query(
-      `SELECT * FROM users WHERE telegram_id=$1`,
-      [telegram_id]
-    );
-
-    let userRow;
-    if (found.length === 0) {
-      const { rows: created } = await pool.query(
-        `INSERT INTO users (telegram_id, full_name)
-         VALUES ($1, $2)
-         RETURNING *`,
-        [telegram_id, full_name]
-      );
-      userRow = created[0];
-    } else {
-      // update full_name (phòng trường hợp user đổi tên)
-      const { rows: updated } = await pool.query(
-        `UPDATE users SET full_name=$2 WHERE telegram_id=$1 RETURNING *`,
-        [telegram_id, full_name]
-      );
-      userRow = updated[0];
+    const { rows: found } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
+    if (found[0]) {
+      return res.json({
+        success: false,
+        code: "EXISTS",
+        message: "Tài khoản đã tồn tại, hãy đăng nhập bằng Username + Password",
+      });
     }
 
-    const token = signJwt(userRow);
-    const safe = await getUserSafeById(userRow.id);
+    await pool.query(`INSERT INTO users (telegram_id, full_name) VALUES ($1, $2)`, [telegram_id, full_name]);
 
-    res.json({ success: true, token, user: safe });
-  } catch (err) {
-    console.error("❌ /auth/telegram:", err.message);
-    res.status(500).json({ success: false, message: err.message });
+    const secret = requireEnv("JWT_SECRET");
+    const reg_token = jwt.sign({ telegram_id, purpose: "register" }, secret, { expiresIn: "10m" });
+
+    return res.json({
+      success: true,
+      code: "CREATED",
+      telegram_id,
+      full_name,
+      reg_token,
+      message: "Đăng ký Telegram OK, vui lòng đặt mật khẩu",
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
   }
 });
 
-// get me
+// ✅ REGISTER STEP 2: set password using reg_token -> login
+app.post("/auth/register-set-password", async (req, res) => {
+  try {
+    const { reg_token, password } = req.body || {};
+    if (!reg_token || !password) {
+      return res.status(400).json({ success: false, message: "Thiếu reg_token hoặc password" });
+    }
+    if (String(password).length < 4) {
+      return res.status(400).json({ success: false, message: "Password tối thiểu 4 ký tự" });
+    }
+
+    const secret = requireEnv("JWT_SECRET");
+    let payload;
+    try {
+      payload = jwt.verify(reg_token, secret);
+    } catch {
+      return res.status(401).json({ success: false, message: "reg_token hết hạn hoặc không hợp lệ" });
+    }
+
+    if (payload.purpose !== "register") {
+      return res.status(401).json({ success: false, message: "reg_token không đúng mục đích" });
+    }
+
+    const telegram_id = Number(payload.telegram_id);
+    const { rows } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: "User không tồn tại" });
+
+    const hash = await bcrypt.hash(String(password), 10);
+
+    const { rows: updated } = await pool.query(
+      `UPDATE users SET password_hash=$2 WHERE telegram_id=$1 RETURNING *`,
+      [telegram_id, hash]
+    );
+
+    const token = signJwt(updated[0]);
+    const safe = await getUserSafeById(updated[0].id);
+    return res.json({ success: true, token, user: safe, message: "Đặt mật khẩu thành công" });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ✅ GET ME
 app.get("/auth/me", authMiddleware, async (req, res) => {
   try {
     const user = await getUserSafeById(req.auth.uid);
@@ -229,78 +296,12 @@ app.get("/auth/me", authMiddleware, async (req, res) => {
   }
 });
 
-// set/change password (user tự đặt pass)
-app.post("/auth/set-password", authMiddleware, async (req, res) => {
-  try {
-    const { password } = req.body || {};
-    if (!password || String(password).length < 4) {
-      return res.status(400).json({ success: false, message: "Password tối thiểu 4 ký tự" });
-    }
-
-    const hash = await bcrypt.hash(String(password), 10);
-
-    await pool.query(
-      `UPDATE users SET password_hash=$2 WHERE id=$1`,
-      [req.auth.uid, hash]
-    );
-
-    const user = await getUserSafeById(req.auth.uid);
-    res.json({ success: true, user });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
-
-app.post("/auth/password-flow", async (req, res) => {
-  try {
-    const { telegram_id, password } = req.body || {};
-    const tgId = Number(telegram_id);
-
-    if (!tgId) return res.status(400).json({ success:false, message:"Missing telegram_id" });
-    if (!password || String(password).length < 4) {
-      return res.status(400).json({ success:false, message:"Password tối thiểu 4 ký tự" });
-    }
-
-    const { rows } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [tgId]);
-    if (!rows[0]) return res.status(404).json({ success:false, message:"User chưa tồn tại (hãy login telegram trước)" });
-
-    const userRow = rows[0];
-
-    // Nếu chưa có pass => set pass
-    if (!userRow.password_hash) {
-      const hash = await bcrypt.hash(String(password), 10);
-      const { rows: updated } = await pool.query(
-        `UPDATE users SET password_hash=$2 WHERE telegram_id=$1 RETURNING *`,
-        [tgId, hash]
-      );
-
-      const token = signJwt(updated[0]);
-      const safe = await getUserSafeById(updated[0].id);
-      return res.json({ success:true, token, user: safe });
-    }
-
-    // Nếu đã có pass => check pass
-    const ok = await bcrypt.compare(String(password), userRow.password_hash);
-    if (!ok) return res.status(401).json({ success:false, message:"Sai mật khẩu" });
-
-    const token = signJwt(userRow);
-    const safe = await getUserSafeById(userRow.id);
-    return res.json({ success:true, token, user: safe });
-
-  } catch (e) {
-    res.status(500).json({ success:false, message: e.message });
-  }
-});
-
-// ====================== POINTS ROUTES (không dùng /api để tránh proxy) ======================
+// ====================== POINTS ROUTES ======================
 
 // claim +1 điểm mỗi ngày
 app.post("/app/points/claim-daily", authMiddleware, async (req, res) => {
   try {
-    const { rows: exists } = await pool.query(
-      `SELECT id FROM users WHERE id=$1`,
-      [req.auth.uid]
-    );
+    const { rows: exists } = await pool.query(`SELECT id FROM users WHERE id=$1`, [req.auth.uid]);
     if (!exists[0]) return res.status(404).json({ success: false, message: "User not found" });
 
     const { rows: check } = await pool.query(
@@ -324,7 +325,6 @@ app.post("/app/points/claim-daily", authMiddleware, async (req, res) => {
 
     const user = await getUserSafeById(req.auth.uid);
     return res.json({ success: true, message: "Bạn đã nhận +1 điểm!", user });
-
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -421,11 +421,9 @@ app.post("/api/save-ticket", async (req, res) => {
     const now = new Date();
     const buyDate = new Date(buy_date);
 
-    // Tạo thời gian xổ thật theo lịch
     let drawTime = new Date(buyDate);
     drawTime.setHours(DRAW_TIMES[region].hour, DRAW_TIMES[region].minute, 0, 0);
 
-    // ======================== ĐẶT LỊCH ========================
     const delay = drawTime - now;
 
     await pool.query(
@@ -436,7 +434,6 @@ app.post("/api/save-ticket", async (req, res) => {
 
     console.log("⏳ Đặt lịch sau", delay / 1000, "giây");
 
-    // nếu delay âm (mua vé quá giờ) -> chạy luôn
     const safeDelay = delay > 0 ? delay : 1000;
     setTimeout(() => checkAndNotify({ number, station, token, region, buy_date }), safeDelay);
 
@@ -511,11 +508,8 @@ app.use("/api", async (req, res) => {
   }
 });
 
-// ====================== ROOT ======================
+// ====================== HEALTH ======================
 app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
-
-
-
