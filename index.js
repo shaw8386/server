@@ -166,14 +166,28 @@ async function getUserSafeById(userId) {
 }
 
 // ====================== AUTH ROUTES ======================
-app.get("/debug/check-pass", async (req, res) => {
-  const { telegram_id, password } = req.query;
-  const tgId = Number(telegram_id);
-  const { rows } = await pool.query(`SELECT password_hash FROM users WHERE telegram_id=$1`, [tgId]);
-  if (!rows[0]) return res.json({ ok:false, msg:"no user" });
-  const ok = await bcrypt.compare(String(password).trim(), rows[0].password_hash);
-  res.json({ ok, hash: rows[0].password_hash });
+// ====================== AUTH CALLBACK (DEEPLINK) ======================
+app.get("/auth/callback", (req, res) => {
+  const token = String(req.query.token || "");
+  // ⚠️ đổi "gi8" theo scheme bạn muốn dùng trong app Unity
+  const deeplink = `gi8://auth?token=${encodeURIComponent(token)}`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:system-ui;padding:16px;">
+  <div>✅ Đăng nhập thành công. Đang quay lại ứng dụng...</div>
+  <script>
+    // redirect về app
+    location.href = "${deeplink}";
+  </script>
+</body>
+</html>
+  `);
 });
+
 // ✅ LOGIN: username (telegram_id) + password
 app.post("/auth/login", async (req, res) => {
   try {
@@ -525,5 +539,6 @@ app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
