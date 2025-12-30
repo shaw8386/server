@@ -64,6 +64,8 @@ function renderTopbarAuth() {
   if (!user) {
     // Logged out
     icon.textContent = "🔐";
+    icon.style.display = "block";
+
     avatar.style.display = "none";
     badge.style.display = "none";
     badge.textContent = "0";
@@ -71,23 +73,20 @@ function renderTopbarAuth() {
   }
 
   // Logged in
-  icon.textContent = "👤";
+  icon.style.display = "none";
 
-  // Badge points
+  // Badge điểm
   const pts = Number(user.points ?? 0);
   badge.textContent = pts > 99 ? "99+" : String(pts);
   badge.style.display = "flex";
 
-  // Avatar (nếu có)
-  // Nếu bạn muốn lưu photo_url vào DB/LS thì thêm field photo_url khi register.
-  const photoUrl = user.photo_url || user.photo || user.avatar_url;
-
+  // Avatar
+  const photoUrl = user.photo_url;
   if (photoUrl) {
     avatar.style.backgroundImage = `url("${photoUrl}")`;
     avatar.textContent = "";
     avatar.style.display = "block";
   } else {
-    // fallback chữ cái
     const name = (user.full_name || "").trim();
     const letter = name ? name[0].toUpperCase() : "U";
     avatar.style.backgroundImage = "";
@@ -96,7 +95,6 @@ function renderTopbarAuth() {
     avatar.style.alignItems = "center";
     avatar.style.justifyContent = "center";
     avatar.style.fontWeight = "900";
-    avatar.style.color = "#111";
     avatar.style.fontSize = "13px";
   }
 }
@@ -373,3 +371,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
