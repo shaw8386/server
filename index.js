@@ -165,7 +165,14 @@ async function getUserSafeById(userId) {
 }
 
 // ====================== AUTH ROUTES ======================
-
+app.get("/debug/check-pass", async (req, res) => {
+  const { telegram_id, password } = req.query;
+  const tgId = Number(telegram_id);
+  const { rows } = await pool.query(`SELECT password_hash FROM users WHERE telegram_id=$1`, [tgId]);
+  if (!rows[0]) return res.json({ ok:false, msg:"no user" });
+  const ok = await bcrypt.compare(String(password).trim(), rows[0].password_hash);
+  res.json({ ok, hash: rows[0].password_hash });
+});
 // ✅ LOGIN: username (telegram_id) + password
 app.post("/auth/login", async (req, res) => {
   try {
@@ -513,3 +520,4 @@ app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
