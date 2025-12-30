@@ -68,47 +68,56 @@
 
       <!-- ===== LOGGED OUT ===== -->
       <div id="authStateLoggedOut" class="auth-logged-out">
-        <div class="profile-desc">
-          Bạn chưa đăng nhập. Hãy đăng nhập/đăng ký bằng Telegram.
+        <div id="authMsg" class="auth-msg" style="display:none;"></div>
+
+        <div class="login-form">
+          <div class="login-title">Đăng nhập</div>
+
+          <input id="loginUsername" type="tel" inputmode="numeric" placeholder="Username (Telegram ID)">
+          <input id="loginPassword" type="password" placeholder="Password">
+
+          <button id="btnLogin" class="ticket-submit-btn">
+            <span class="btn-login-inline">
+              <svg class="icon-lock" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2Zm-7-2a2 2 0 1 1 4 0v2h-4V6Zm7 14H7V10h10v10Z"/>
+              </svg>
+              Login
+            </span>
+          </button>
         </div>
 
-        <!-- 2 nút cùng hàng -->
-        <div class="auth-btn-row">
-          <button id="btnTgRegister" class="ticket-submit-btn">
-            🧩 Đăng Ký
-          </button>
+        <div class="or-line"><span>hoặc</span></div>
 
-          <button id="btnTgLogin" class="ticket-submit-btn btn-login">
-            <svg class="icon-lock" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2Zm-7-2a2 2 0 1 1 4 0v2h-4V6Zm7 14H7V10h10v10Z"/>
-            </svg>
-            <span>Đăng Nhập</span>
-          </button>
+        <div class="auth-btn-row">
+          <button id="btnTgRegister" class="ticket-submit-btn">🧩 Register by Telegram</button>
         </div>
 
         <!-- Telegram Widget -->
         <div id="tgWidgetPanel" class="tg-widget-panel">
-          <div class="tg-widget-title">✅ Đăng nhập bằng Telegram</div>
+          <div class="tg-widget-title">✅ Đăng ký bằng Telegram</div>
           <div id="tgWidgetWrap"></div>
         </div>
 
-        <!-- Password -->
-        <div id="pwPanel" class="pw-panel">
-          <div class="pw-title">🔑 Nhập mật khẩu</div>
-          <input id="pwInput" type="password" placeholder="Mật khẩu">
-          <button id="btnPwSubmit" class="ticket-submit-btn btn-confirm">
-            ✅ Xác nhận
-          </button>
+        <!-- Set password -->
+        <div id="setPwPanel" class="pw-panel">
+          <div class="pw-title">🔑 Đặt mật khẩu</div>
+          <input id="setPwInput" type="password" placeholder="Mật khẩu (tối thiểu 4 ký tự)">
+          <button id="btnSetPwSubmit" class="ticket-submit-btn btn-confirm">✅ Lưu mật khẩu</button>
         </div>
       </div>
 
       <!-- ===== LOGGED IN ===== -->
-      <div id="authStateLoggedIn" class="auth-logged-in">
+      <div id="authStateLoggedIn" class="auth-logged-in" style="display:none;">
         <div class="profile-info">
           <div><b>Telegram ID:</b> <span id="uTgId">--</span></div>
           <div><b>Full name:</b> <span id="uFullName">--</span></div>
           <div><b>Điểm:</b> <span id="uPoints">0</span></div>
+          <div><b>Điểm danh hôm nay:</b> <span id="uClaimedToday">--</span></div>
         </div>
+
+        <button id="btnClaimDaily" class="ticket-submit-btn btn-claim">
+          ✅ Điểm danh nhận +1 điểm
+        </button>
 
         <button id="btnLogout" class="ticket-submit-btn btn-logout">
           🚪 Logout
