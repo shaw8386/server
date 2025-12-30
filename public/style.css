@@ -481,9 +481,7 @@ input[type="date"]:not(:focus):not([value]):before {
 }
 
 /* ===== PROFILE PAGE ===== */
-.profile-card {
-  padding: 12px;
-}
+.profile-card { padding: 12px; }
 
 .profile-title {
   font-weight: 800;
@@ -491,44 +489,68 @@ input[type="date"]:not(:focus):not([value]):before {
   margin-bottom: 8px;
 }
 
-.profile-desc {
+.auth-msg{
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #6b4e00;
   margin-bottom: 10px;
-  color: #555;
+  font-weight: 600;
 }
 
-/* ===== AUTH STATES ===== */
+/* trạng thái */
 .auth-logged-in,
-.auth-logged-out {
-  display: none;
+.auth-logged-out { display: none; }
+
+/* login form */
+.login-form input{
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  margin-bottom: 8px;
 }
 
-/* ===== BUTTON ROW ===== */
-.auth-btn-row {
-  display: flex;
-  gap: 10px;
+.login-title{
+  font-weight: 800;
+  margin-bottom: 8px;
 }
 
-.auth-btn-row .ticket-submit-btn {
-  flex: 1;
-  margin: 0;
+/* icon lock đen/trắng */
+.icon-lock {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
-/* ===== LOGIN BUTTON ICON ===== */
-.btn-login {
-  display: flex;
+.btn-login-inline{
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.icon-lock {
-  width: 18px;
-  height: 18px;
-  fill: currentColor; /* đen/trắng theo màu chữ */
+/* line hoặc */
+.or-line{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  color: #888;
+  font-weight: 700;
 }
+.or-line::before,
+.or-line::after{
+  content:"";
+  flex: 1;
+  height: 1px;
+  background: #e6eaf2;
+}
+.or-line span{ padding: 0 6px; }
 
-/* ===== TELEGRAM WIDGET ===== */
-.tg-widget-panel {
+/* telegram widget panel */
+.tg-widget-panel{
   display: none;
   margin-top: 12px;
   padding: 10px;
@@ -536,40 +558,30 @@ input[type="date"]:not(:focus):not([value]):before {
   border-radius: 12px;
   background: #fafcff;
 }
-
-.tg-widget-title {
-  font-weight: 700;
+.tg-widget-title{
+  font-weight: 800;
   margin-bottom: 8px;
 }
 
-/* ===== PASSWORD PANEL ===== */
-.pw-panel {
+/* set password panel */
+.pw-panel{
   display: none;
   margin-top: 12px;
 }
-
-.pw-title {
-  font-weight: 700;
+.pw-title{
+  font-weight: 800;
   margin-bottom: 6px;
 }
-
-.pw-panel input {
+.pw-panel input{
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 10px;
 }
+.btn-confirm{ margin-top: 8px; }
 
-.btn-confirm {
-  margin-top: 8px;
-}
+/* logged-in info */
+.profile-info{ line-height: 1.7; }
 
-/* ===== LOGGED IN INFO ===== */
-.profile-info {
-  line-height: 1.7;
-}
-
-/* ===== LOGOUT ===== */
-.btn-logout {
-  margin-top: 12px;
-}
+.btn-claim{ margin-top: 12px; }
+.btn-logout{ margin-top: 10px; }
