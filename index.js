@@ -60,6 +60,7 @@ async function initDatabase() {
         id SERIAL PRIMARY KEY,
         telegram_id BIGINT UNIQUE NOT NULL,
         full_name VARCHAR(120),
+        photo_url TEXT,
         password_hash TEXT,
         points INT DEFAULT 0,
         last_claim_date DATE,
@@ -156,7 +157,7 @@ function authMiddleware(req, res, next) {
 
 async function getUserSafeById(userId) {
   const { rows } = await pool.query(
-    `SELECT telegram_id, full_name, points,
+    `SELECT telegram_id, full_name, photo_url, points,
             (last_claim_date = CURRENT_DATE) as claimed_today
      FROM users WHERE id=$1`,
     [userId]
@@ -222,6 +223,7 @@ app.post("/auth/telegram-register", async (req, res) => {
     if (!telegram_id) return res.status(400).json({ success: false, message: "Missing telegram id" });
 
     const full_name = `${tg.first_name || ""} ${tg.last_name || ""}`.trim();
+    const photo_url = tg.photo_url || null;
 
     const { rows: found } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
     if (found[0]) {
@@ -232,7 +234,10 @@ app.post("/auth/telegram-register", async (req, res) => {
       });
     }
 
-    await pool.query(`INSERT INTO users (telegram_id, full_name) VALUES ($1, $2)`, [telegram_id, full_name]);
+    await pool.query(
+      `INSERT INTO users (telegram_id, full_name, photo_url) VALUES ($1, $2, $3)`,
+      [telegram_id, full_name, photo_url]
+    );
 
     const secret = requireEnv("JWT_SECRET");
     const reg_token = jwt.sign({ telegram_id, purpose: "register" }, secret, { expiresIn: "10m" });
@@ -520,4 +525,5 @@ app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
