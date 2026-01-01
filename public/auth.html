@@ -3,29 +3,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GI8 — Đăng ký Telegram</title>
+  <title>GI8 — Xác thực Telegram</title>
   <style>
     body{font-family:system-ui;background:#f5f7fb;margin:0;padding:16px}
     .card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);max-width:420px;margin:18px auto}
     .title{font-weight:900;font-size:18px;margin-bottom:10px}
     .msg{display:none;background:#fff3cd;border:1px solid #ffe69c;color:#6b4e00;padding:10px;border-radius:10px;font-weight:700;margin-bottom:10px}
     .panel{margin-top:12px;padding:10px;border:1px dashed #cfd6e4;border-radius:12px;background:#fafcff}
+    .hint{color:#666;font-weight:700;font-size:13px;margin-top:8px}
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="title">🧩 Xổ Số Gi8 — Đăng Ký Tài Khoản</div>
+    <div class="title">🧩 GI8 — Xác thực Telegram</div>
     <div id="msg" class="msg"></div>
 
     <div class="panel">
-      <div style="font-weight:900;margin-bottom:8px;">🔽 Xác thực Telegram</div>
+      <div style="font-weight:900;margin-bottom:8px;">🔽 Bấm để xác thực</div>
       <div id="tgWrap"></div>
+      <div class="hint">Sau khi xác thực xong, hệ thống sẽ tự quay lại app.</div>
     </div>
   </div>
 
 <script>
   const TG_BOT_USERNAME = "gi8_check_bot";
-  const API_BASE = ""; // cùng domain railway
+  const API_BASE = ""; // cùng domain railway thì để rỗng
 
   const $ = (id)=>document.getElementById(id);
   function showMsg(t){ const el=$("msg"); el.style.display="block"; el.textContent=t; }
@@ -38,33 +40,39 @@
     window.onTelegramAuth = async (tgUser)=>{
       hideMsg();
       try{
-        const r = await fetch(API_BASE + "/auth/telegram-register",{
+        // ✅ NEW: gọi endpoint identify (dùng cho cả login & register)
+        const r = await fetch(API_BASE + "/auth/telegram-identify",{
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify(tgUser)
         });
+
         const data = await r.json();
 
         if(!data.success){
-          // user đã tồn tại -> quay về app để user login bằng pass
-          if(data.code==="EXISTS"){
-            // gửi về app trạng thái EXISTS
-            location.href =
-              "gi8://tgreg?status=EXISTS"
-              + "&telegram_id=" + encodeURIComponent(String(tgUser.id || ""))
-              + "&full_name=" + encodeURIComponent(((tgUser.first_name||"")+" "+(tgUser.last_name||"")).trim());
-            return;
-          }
-          showMsg(data.message || "Đăng ký thất bại");
+          showMsg(data.message || "Xác thực thất bại");
           return;
         }
 
-        // ✅ tạo mới hoặc NEED_SET_PASSWORD -> gửi reg_token về app để app local set password
-        location.href =
-          "gi8://tgreg?status=CREATED"
-          + "&reg_token=" + encodeURIComponent(data.reg_token || "")
-          + "&telegram_id=" + encodeURIComponent(String(data.telegram_id || ""))
-          + "&full_name=" + encodeURIComponent(String(data.full_name || ""));
+        // ✅ nếu đã tồn tại -> trả login_token
+        if(data.status === "EXISTS"){
+          location.href =
+            "gi8://tgreg?status=EXISTS"
+            + "&login_token=" + encodeURIComponent(data.login_token || "")
+            + "&full_name=" + encodeURIComponent(data.full_name || "");
+          return;
+        }
+
+        // ✅ user mới -> trả reg_token
+        if(data.status === "CREATED"){
+          location.href =
+            "gi8://tgreg?status=CREATED"
+            + "&reg_token=" + encodeURIComponent(data.reg_token || "")
+            + "&full_name=" + encodeURIComponent(data.full_name || "");
+          return;
+        }
+
+        showMsg("⚠️ Trạng thái không hợp lệ: " + (data.status || "unknown"));
       }catch(e){
         showMsg("❌ Lỗi kết nối server");
       }
@@ -85,4 +93,3 @@
 </script>
 </body>
 </html>
-
