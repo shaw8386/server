@@ -167,6 +167,113 @@ async function getUserSafeById(userId) {
 
 // ====================== AUTH ROUTES ======================
 // ====================== AUTH CALLBACK (DEEPLINK) ======================
+// ✅ Telegram identify: dùng cho cả login & register
+app.post("/auth/telegram-identify", async (req, res) => {
+  try {
+    const tg = req.body || {};
+    const vr = verifyTelegramAuth(tg);
+    if (!vr.ok) return res.status(401).json({ success: false, message: vr.message });
+
+    const telegram_id = Number(tg.id);
+    if (!telegram_id) return res.status(400).json({ success: false, message: "Missing telegram id" });
+
+    const full_name = `${tg.first_name || ""} ${tg.last_name || ""}`.trim();
+    const photo_url = tg.photo_url || null;
+
+    const { rows: found } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
+    const secret = requireEnv("JWT_SECRET");
+
+    // user đã tồn tại -> trả login_token
+    if (found[0]) {
+      // update name/photo nếu đổi
+      await pool.query(
+        `UPDATE users SET full_name=$2, photo_url=$3 WHERE telegram_id=$1`,
+        [telegram_id, full_name, photo_url]
+      );
+
+      const login_token = jwt.sign(
+        { telegram_id, purpose: "login" },
+        secret,
+        { expiresIn: "10m" }
+      );
+
+      return res.json({
+        success: true,
+        status: "EXISTS",
+        telegram_id,
+        full_name,
+        login_token,
+        message: "Telegram OK. Nhập mật khẩu để đăng nhập.",
+      });
+    }
+
+    // user mới -> tạo user (chưa có password) -> trả reg_token
+    await pool.query(
+      `INSERT INTO users (telegram_id, full_name, photo_url) VALUES ($1, $2, $3)`,
+      [telegram_id, full_name, photo_url]
+    );
+
+    const reg_token = jwt.sign(
+      { telegram_id, purpose: "register" },
+      secret,
+      { expiresIn: "10m" }
+    );
+
+    return res.json({
+      success: true,
+      status: "CREATED",
+      telegram_id,
+      full_name,
+      reg_token,
+      message: "Telegram OK. Đặt mật khẩu để hoàn tất đăng ký.",
+    });
+
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.post("/auth/login-with-tg", async (req, res) => {
+  try {
+    const { login_token, password } = req.body || {};
+    if (!login_token || !password) {
+      return res.status(400).json({ success: false, message: "Thiếu login_token hoặc password" });
+    }
+
+    const secret = requireEnv("JWT_SECRET");
+    let payload;
+    try {
+      payload = jwt.verify(login_token, secret);
+    } catch {
+      return res.status(401).json({ success: false, message: "login_token hết hạn hoặc không hợp lệ" });
+    }
+
+    if (payload.purpose !== "login") {
+      return res.status(401).json({ success: false, message: "login_token không đúng mục đích" });
+    }
+
+    const telegram_id = Number(payload.telegram_id);
+    const { rows } = await pool.query(`SELECT * FROM users WHERE telegram_id=$1`, [telegram_id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: "User not found" });
+
+    const userRow = rows[0];
+    if (!userRow.password_hash) {
+      return res.json({ success: false, code: "NO_PASSWORD", message: "Tài khoản chưa có mật khẩu" });
+    }
+
+    const ok = await bcrypt.compare(String(password), userRow.password_hash);
+    if (!ok) return res.json({ success: false, code: "WRONG_PASSWORD", message: "Sai mật khẩu" });
+
+    const token = signJwt(userRow);
+    const safe = await getUserSafeById(userRow.id);
+    return res.json({ success: true, token, user: safe });
+
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+
 app.get("/auth/callback", (req, res) => {
   const token = String(req.query.token || "");
   // ⚠️ đổi "gi8" theo scheme bạn muốn dùng trong app Unity
@@ -559,6 +666,7 @@ app.get("/health", (_, res) => res.send("✅ Railway Lottery Server Running"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Server chạy port", PORT));
+
 
 
 
